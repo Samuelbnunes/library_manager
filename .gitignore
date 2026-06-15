@@ -1,0 +1,20 @@
+# Executáveis locais e ferramentas
+bin/
+
+# Cache do IntelliSense e arquivos de análise
+.cache/
+compile_commands.json
+
+# Arquivos temporários do compilador
+*.o
+*.elf
+*.hex
+*.d
+build.options.json
+includes.cache
+libraries.cache
+sketch/
+
+# Arquivos do sistema operacional
+Thumbs.db
+.DS_Store
