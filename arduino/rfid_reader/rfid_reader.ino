@@ -38,7 +38,15 @@ void setup() {
 }
 
 void loop() {
-  // Verifica se há um novo cartão/tag presente no leitor
+  // 1. Verifica se há comandos chegando do backend (ex: 'R' para indicar atraso de empréstimo)
+  if (Serial.available() > 0) {
+    char incoming = Serial.read();
+    if (incoming == 'R') {
+      triggerFailure();
+    }
+  }
+
+  // 2. Verifica se há um novo cartão/tag presente no leitor
   if (!mfrc522.PICC_IsNewCardPresent()) {
     return;
   }
@@ -48,38 +56,53 @@ void loop() {
     return;
   }
 
-  // Exibe o UID lido na porta serial
-  Serial.print("UID da Tag:");
+  // Formata o UID lido
   String uidString = "";
   for (byte i = 0; i < mfrc522.uid.size; i++) {
     if (mfrc522.uid.uidByte[i] < 0x10) {
-      Serial.print(" 0");
       uidString += " 0";
     } else {
-      Serial.print(" ");
       uidString += " ";
     }
-    Serial.print(mfrc522.uid.uidByte[i], HEX);
     uidString += String(mfrc522.uid.uidByte[i], HEX);
   }
   
-  Serial.println();
   uidString.toUpperCase();
   uidString.trim();
   
-  Serial.print("UID Formatado: ");
+  // Envia a tag correspondente com base no tipo
+  // Estudantes cadastrados:
+  // Ana Silva: 43 E1 5C FE
+  // Bruno Santos: 83 6C C1 02
+  // Carlos Oliveira: 33 14 11 FF
+  if (uidString == "43 E1 5C FE" || uidString == "83 6C C1 02" || uidString == "33 14 11 FF") {
+    Serial.print("ALUNO:");
+  } else {
+    Serial.print("LIVRO:");
+  }
   Serial.println(uidString);
   
-  // Verificação de acesso
-  // Substitua "A1 B2 C3 D4" pelo UID real da sua tag após ler ela no monitor
-  if (uidString == "A1 B2 C3 D4") {
-    Serial.println("Status: Acesso Autorizado!");
+  // Aguarda a resposta do back-end por até 2 segundos
+  unsigned long startWait = millis();
+  char response = ' ';
+  bool receivedResponse = false;
+  
+  while (millis() - startWait < 2000) {
+    if (Serial.available() > 0) {
+      response = Serial.read();
+      if (response == 'V' || response == 'R') {
+        receivedResponse = true;
+        break;
+      }
+    }
+    delay(10);
+  }
+
+  if (receivedResponse && response == 'V') {
     triggerSuccess();
   } else {
-    Serial.println("Status: Tag desconhecida. Acesso Negado!");
     triggerFailure();
   }
-  Serial.println("--------------------------------");
 
   // Para a leitura do cartão atual
   mfrc522.PICC_HaltA();
