@@ -47,24 +47,37 @@ Siga este guia para configurar o ambiente do zero no **Windows** (instruções a
 
 ### Passo 2: Gravar o Firmware no Arduino
 
-O projeto já vem com a ferramenta `arduino-cli` embutida para compilação direta pelo terminal, sem a necessidade de instalar a IDE do Arduino completa.
+A pasta `arduino/bin/` contém binários específicos de sistema operacional, ela é ignorada pelo Git (`.gitignore`). Siga o passo a passo para compilar e enviar o código para a placa:
 
-1.  Abra o **PowerShell** ou Prompt de Comando (CMD) na pasta raiz do projeto.
-2.  Conecte o Arduino ao computador via USB.
-3.  Navegue até a pasta `arduino`:
+#### Usando a Ferramenta de Linha de Comando (`arduino-cli`)
+Se você prefere continuar usando comandos de terminal:
+1.  **Instalar o `arduino-cli`**:
+    *   **Windows**: Baixe o arquivo ZIP da página oficial do [Arduino CLI Releases](https://arduino.github.io/arduino-cli/latest/installation/) ou instale via terminal usando o gerenciador do Windows:
+        ```powershell
+        winget install Arduino.ArduinoCLI
+        ```
+        Depois, crie uma pasta chamada `bin` dentro da pasta `arduino` e mova o executável `arduino-cli.exe` para dentro dela.
+    *   **macOS / Linux / Raspberry Pi**: Instale rodando o script oficial:
+        ```bash
+        curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+        ```
+        Crie a pasta `bin` dentro de `arduino/` e mova o executável gerado para lá.
+2.  Abra o terminal na pasta `arduino/`.
+3.  Instale o núcleo da placa Arduino Uno e a biblioteca necessária:
     ```powershell
-    cd arduino
+    .\bin\arduino-cli core install arduino:avr
+    .\bin\arduino-cli lib install MFRC522
     ```
 4.  **Compilar o código**:
     ```powershell
     .\bin\arduino-cli compile --fqbn arduino:avr:uno rfid_reader
     ```
 5.  **Enviar o código para a placa**:
-    Substitua `COM3` pela porta em que seu Arduino foi reconhecido:
+    Substitua `COM3` pela sua porta:
     ```powershell
     .\bin\arduino-cli upload -p COM3 --fqbn arduino:avr:uno rfid_reader
     ```
-    *(Dica: Para descobrir a porta no Windows, abra o Gerenciador de Dispositivos e olhe a seção "Portas (COM e LPT)")*.
+    *(Dica: Para descobrir a porta no Windows, consulte a seção "Portas (COM e LPT)" no Gerenciador de Dispositivos).*
 
 ---
 
