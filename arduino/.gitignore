@@ -1,6 +1,3 @@
-# Executáveis locais e ferramentas
-bin/
-
 # Cache do IntelliSense e arquivos de análise
 .cache/
 compile_commands.json
