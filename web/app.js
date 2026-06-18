@@ -1,10 +1,8 @@
 const API_BASE = window.location.port === "5000" ? "" : "http://localhost:5000";
-let pollInterval = null;
 
 let currentBooks = [];
 let lastHistoryIds = new Set();
 let isFirstLoad = true;
-let mockEnabled = false;
 
 const elServerStatus = document.getElementById("status-server");
 const elRfidStatus = document.getElementById("status-rfid");
@@ -19,9 +17,12 @@ const searchInput = document.getElementById("search-input");
 const statusFilter = document.getElementById("status-filter");
 const booksTableBody = document.querySelector("#books-table tbody");
 
+const activeStudentCard = document.getElementById("active-student-card");
+const overdueSummaryCard = document.getElementById("overdue-summary-card");
+const overdueList = document.getElementById("overdue-list");
+const eventsList = document.getElementById("events-list");
 const timelineHistory = document.getElementById("timeline-history");
 const reviewsContainer = document.getElementById("reviews-container");
-
 const rankingBorrowed = document.getElementById("ranking-borrowed");
 const rankingRated = document.getElementById("ranking-rated");
 
@@ -43,11 +44,12 @@ const mockPanel = document.getElementById("mock-panel");
 const mockPanelSubtitle = document.getElementById("mock-panel-subtitle");
 const mockStudents = document.getElementById("mock-students");
 const mockBooks = document.getElementById("mock-books");
+const mockGeneric = document.getElementById("mock-generic");
 const mockResult = document.getElementById("mock-result");
 
 document.addEventListener("DOMContentLoaded", () => {
     fetchDashboardData();
-    pollInterval = setInterval(fetchDashboardData, 2000);
+    setInterval(fetchDashboardData, 2000);
 
     searchInput.addEventListener("input", renderBooksTable);
     statusFilter.addEventListener("change", renderBooksTable);
@@ -85,53 +87,60 @@ async function fetchDashboardData() {
     try {
         const response = await fetch(`${API_BASE}/api/dashboard`);
         if (!response.ok) {
-            throw new Error("Erro na resposta do servidor");
+            throw new Error("Erro na resposta do servidor.");
         }
 
         const data = await response.json();
-
         updateConnectionStatus(true, data.serial_connected, data.serial_mode);
+        updateMetrics(data.counts);
 
-        metricDisponiveis.textContent = data.counts.disponiveis;
-        metricEmprestados.textContent = data.counts.emprestados;
-        metricAtrasados.textContent = data.counts.atrasados;
-
-        if (data.counts.atrasados > 0) {
-            cardAtraso.classList.add("has-atraso");
-        } else {
-            cardAtraso.classList.remove("has-atraso");
-        }
-
-        currentBooks = data.ranking_emprestimos || [];
+        currentBooks = data.acervo || [];
         renderBooksTable();
-        renderHistory(data.historico_recente);
-        renderReviews(data.avaliacoes);
-        renderRankings(data.ranking_emprestimos, data.ranking_avaliacoes);
+        renderActiveStudent(data.active_student);
+        renderOverdueSummary(data.atrasos || [], data.loan_timeout_seconds);
+        renderOverdueList(data.atrasos || []);
+        renderEvents(data.eventos || []);
+        renderHistory(data.historico_recente || []);
+        renderReviews(data.avaliacoes || []);
+        renderRankings(data.ranking_emprestimos || [], data.ranking_avaliacoes || []);
         renderMockPanel(data);
 
         isFirstLoad = false;
     } catch (error) {
         console.error("Erro ao buscar dados do dashboard:", error);
         updateConnectionStatus(false, false, "hardware");
+        activeStudentCard.className = "state-card error";
+        activeStudentCard.textContent = "Nao foi possivel carregar os dados do sistema.";
     }
 }
 
 function updateConnectionStatus(serverOnline, rfidConnected, serialMode) {
-    if (serverOnline) {
-        elServerStatus.className = "status-pill online";
-        elServerStatus.querySelector(".status-label").textContent = "Servidor: Online";
-    } else {
-        elServerStatus.className = "status-pill offline";
-        elServerStatus.querySelector(".status-label").textContent = "Servidor: Offline";
-    }
+    elServerStatus.className = serverOnline ? "status-pill online" : "status-pill offline";
+    elServerStatus.querySelector(".status-label").textContent = serverOnline
+        ? "Servidor: Online"
+        : "Servidor: Offline";
 
     if (rfidConnected) {
         elRfidStatus.className = "status-pill online";
         elRfidStatus.querySelector(".status-label").textContent =
-            serialMode === "mock" ? "RFID: Mock ativo" : "RFID Arduino: Conectado";
+            serialMode === "mock"
+                ? "RFID: MOCK ativo"
+                : "RFID Arduino: Conectado";
     } else {
         elRfidStatus.className = "status-pill offline";
         elRfidStatus.querySelector(".status-label").textContent = "RFID Arduino: Desconectado";
+    }
+}
+
+function updateMetrics(counts) {
+    metricDisponiveis.textContent = counts.disponiveis;
+    metricEmprestados.textContent = counts.emprestados;
+    metricAtrasados.textContent = counts.atrasados;
+
+    if (counts.atrasados > 0) {
+        cardAtraso.classList.add("has-atraso");
+    } else {
+        cardAtraso.classList.remove("has-atraso");
     }
 }
 
@@ -148,28 +157,20 @@ function renderBooksTable() {
     });
 
     if (filtered.length === 0) {
-        booksTableBody.innerHTML = `<tr><td colspan="5" class="table-placeholder">Nenhum livro localizado.</td></tr>`;
+        booksTableBody.innerHTML = `<tr><td colspan="6" class="table-placeholder">Nenhum livro localizado.</td></tr>`;
         return;
     }
 
     booksTableBody.innerHTML = filtered.map(book => {
-        let statusClass = "badge-disponivel";
-        let statusLabel = "Disponivel";
-
-        if (book.status === "emprestado") {
-            statusClass = "badge-emprestado";
-            statusLabel = "Emprestado";
-        } else if (book.status === "atrasado") {
-            statusClass = "badge-atrasado";
-            statusLabel = "Em atraso";
-        }
-
+        const statusData = getStatusData(book.status);
+        const borrower = book.aluno_nome || "Sem aluno vinculado";
         return `
             <tr>
                 <td style="font-weight: 600; color: #fff;">${book.titulo}</td>
                 <td>${book.autor}</td>
                 <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-muted);">${book.id_rfid}</td>
-                <td><span class="badge ${statusClass}">${statusLabel}</span></td>
+                <td><span class="badge ${statusData.className}">${statusData.label}</span></td>
+                <td>${borrower}</td>
                 <td>
                     <button class="btn btn-secondary btn-sm" onclick="showModal('${book.id_rfid}', '${book.titulo.replace(/'/g, "\\'")}')">
                         Avaliar
@@ -180,8 +181,71 @@ function renderBooksTable() {
     }).join("");
 }
 
+function renderActiveStudent(activeStudent) {
+    if (!activeStudent) {
+        activeStudentCard.className = "state-card neutral";
+        activeStudentCard.innerHTML = "Nenhum aluno identificado no momento.";
+        return;
+    }
+
+    activeStudentCard.className = "state-card success";
+    activeStudentCard.innerHTML = `
+        <strong>${activeStudent.nome}</strong><br>
+        Matricula ${activeStudent.matricula}<br>
+        Janela de leitura ativa por mais ${activeStudent.remaining_seconds}s.
+    `;
+}
+
+function renderOverdueSummary(overdueItems, timeoutSeconds) {
+    if (!overdueItems.length) {
+        overdueSummaryCard.className = "state-card neutral";
+        overdueSummaryCard.innerHTML = "Nenhum emprestimo atrasado agora.";
+        return;
+    }
+
+    overdueSummaryCard.className = "state-card error";
+    overdueSummaryCard.innerHTML = `
+        <strong>${overdueItems.length} emprestimo(s) em atraso.</strong><br>
+        Regra ativa: vencimento apos ${timeoutSeconds}s para demonstracao.
+    `;
+}
+
+function renderOverdueList(overdueItems) {
+    if (!overdueItems.length) {
+        overdueList.innerHTML = `<p class="timeline-placeholder">Nenhum atraso registrado.</p>`;
+        return;
+    }
+
+    overdueList.innerHTML = overdueItems.map(item => `
+        <article class="stack-item danger">
+            <strong>${item.livro_titulo}</strong>
+            <span>Aluno: ${item.aluno_nome} (${item.aluno_matricula})</span>
+            <span>Emprestado em: ${item.data_emprestimo}</span>
+            <span>Atraso atual: ${item.seconds_overdue}s</span>
+        </article>
+    `).join("");
+}
+
+function renderEvents(events) {
+    if (!events.length) {
+        eventsList.innerHTML = `<p class="ranking-placeholder">Nenhum evento registrado.</p>`;
+        return;
+    }
+
+    eventsList.innerHTML = events.map(event => `
+        <article class="event-item ${event.status}">
+            <div class="event-meta">
+                <strong>${formatEventType(event.event_type)}</strong>
+                <span>${formatDate(event.created_at)}</span>
+            </div>
+            <p>${event.message}</p>
+            <span class="event-foot">${event.source} ${event.rfid_id ? `| RFID ${event.rfid_id}` : ""}</span>
+        </article>
+    `).join("");
+}
+
 function renderHistory(history) {
-    if (!history || history.length === 0) {
+    if (!history.length) {
         timelineHistory.innerHTML = `<p class="timeline-placeholder">Nenhuma movimentacao registrada.</p>`;
         lastHistoryIds.clear();
         return;
@@ -209,7 +273,7 @@ function renderHistory(history) {
             dateToShow = item.data_devolucao || item.data_emprestimo;
         } else if (item.status === "atrasado") {
             dotClass = "atrasado";
-            actionLabel = "atrasou na devolucao de";
+            actionLabel = "esta com atraso em";
         }
 
         return `
@@ -231,7 +295,7 @@ function renderHistory(history) {
 }
 
 function renderReviews(reviews) {
-    if (!reviews || reviews.length === 0) {
+    if (!reviews.length) {
         reviewsContainer.innerHTML = `<p class="reviews-placeholder">Nenhum feedback registrado ainda.</p>`;
         return;
     }
@@ -251,59 +315,49 @@ function renderReviews(reviews) {
 }
 
 function renderRankings(byBorrowed, byRated) {
-    if (!byBorrowed || byBorrowed.length === 0) {
+    if (!byBorrowed.length) {
         rankingBorrowed.innerHTML = `<li class="ranking-placeholder">Nenhum dado disponivel.</li>`;
     } else {
-        const sortedBorrowed = [...byBorrowed]
+        rankingBorrowed.innerHTML = [...byBorrowed]
             .sort((a, b) => b.emprestimos_count - a.emprestimos_count)
-            .slice(0, 3);
-
-        rankingBorrowed.innerHTML = sortedBorrowed.map((book, index) => {
-            const rankClass = index === 0 ? "rank-1" : (index === 1 ? "rank-2" : "rank-3");
-            return `
-                <li class="ranking-item ${rankClass}">
+            .slice(0, 3)
+            .map((book, index) => `
+                <li class="ranking-item rank-${index + 1}">
                     <div class="ranking-position">${index + 1}</div>
                     <div class="ranking-details">
                         <div class="ranking-name">${book.titulo}</div>
                         <div class="ranking-meta">${book.emprestimos_count} emprestimo(s)</div>
                     </div>
                 </li>
-            `;
-        }).join("");
+            `).join("");
     }
 
-    if (!byRated || byRated.length === 0) {
+    if (!byRated.length) {
         rankingRated.innerHTML = `<li class="ranking-placeholder">Nenhuma avaliacao cadastrada.</li>`;
     } else {
-        rankingRated.innerHTML = byRated.slice(0, 3).map((book, index) => {
-            const rankClass = index === 0 ? "rank-1" : (index === 1 ? "rank-2" : "rank-3");
-            const ratingFormatted = parseFloat(book.nota_media).toFixed(1);
-            return `
-                <li class="ranking-item ${rankClass}">
-                    <div class="ranking-position">${index + 1}</div>
-                    <div class="ranking-details">
-                        <div class="ranking-name">${book.titulo}</div>
-                        <div class="ranking-meta">★ ${ratingFormatted} (${book.avaliacoes_count} votos)</div>
-                    </div>
-                </li>
-            `;
-        }).join("");
+        rankingRated.innerHTML = byRated.slice(0, 3).map((book, index) => `
+            <li class="ranking-item rank-${index + 1}">
+                <div class="ranking-position">${index + 1}</div>
+                <div class="ranking-details">
+                    <div class="ranking-name">${book.titulo}</div>
+                    <div class="ranking-meta">★ ${parseFloat(book.nota_media).toFixed(1)} (${book.avaliacoes_count} voto(s))</div>
+                </div>
+            </li>
+        `).join("");
     }
 }
 
 function renderMockPanel(data) {
-    mockEnabled = Boolean(data.mock_enabled);
-
-    if (!mockEnabled) {
+    if (!data.mock_enabled) {
         mockPanel.classList.add("hidden");
         return;
     }
 
     mockPanel.classList.remove("hidden");
-    mockPanelSubtitle.textContent = `Porta atual: ${data.serial_mode}. Timeout de atraso: ${data.loan_timeout_seconds}s.`;
+    mockPanelSubtitle.textContent = `Porta atual: ${data.serial_mode}. Timeout de demonstracao: ${data.loan_timeout_seconds}s.`;
 
-    const alunos = (data.mock_data && data.mock_data.alunos) || [];
-    const livros = (data.mock_data && data.mock_data.livros) || [];
+    const alunos = data.mock_data?.alunos || [];
+    const livros = data.mock_data?.livros || [];
 
     mockStudents.innerHTML = alunos.map(aluno => `
         <button class="btn btn-secondary btn-sm mock-action-button"
@@ -318,6 +372,16 @@ function renderMockPanel(data) {
             ${livro.titulo}
         </button>
     `).join("");
+
+    mockGeneric.innerHTML = [...alunos, ...livros].map(item => {
+        const label = item.nome || item.titulo;
+        return `
+            <button class="btn btn-secondary btn-sm mock-action-button"
+                onclick="simulateScan('RFID', '${item.id_rfid}')">
+                ${label}
+            </button>
+        `;
+    }).join("");
 }
 
 async function simulateScan(type, rfidId) {
@@ -325,17 +389,17 @@ async function simulateScan(type, rfidId) {
         const response = await fetch(`${API_BASE}/api/mock/scan`, {
             method: "POST",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             },
             body: JSON.stringify({
                 type,
-                rfid_id: rfidId
-            })
+                rfid_id: rfidId,
+            }),
         });
 
         const result = await response.json();
         if (!response.ok) {
-            throw new Error(result.error || "Falha ao simular leitura");
+            throw new Error(result.error || "Falha ao simular leitura.");
         }
 
         mockResult.className = result.success ? "mock-result success" : "mock-result error";
@@ -347,6 +411,33 @@ async function simulateScan(type, rfidId) {
     }
 }
 
+function getStatusData(status) {
+    if (status === "emprestado") {
+        return { className: "badge-emprestado", label: "Emprestado" };
+    }
+    if (status === "atrasado") {
+        return { className: "badge-atrasado", label: "Em atraso" };
+    }
+    return { className: "badge-disponivel", label: "Disponivel" };
+}
+
+function formatEventType(eventType) {
+    const labels = {
+        serial_connection: "Conexao serial",
+        student_identified: "Aluno identificado",
+        rfid_classification: "Classificacao RFID",
+        loan_created: "Emprestimo",
+        loan_returned: "Devolucao",
+        loan_overdue: "Atraso",
+        review_created: "Avaliacao",
+        book_scan: "Leitura de livro",
+        system: "Sistema",
+        daemon_error: "Erro interno",
+        book_state_repaired: "Ajuste de estado",
+    };
+    return labels[eventType] || eventType;
+}
+
 function formatDate(dateStr) {
     if (!dateStr) {
         return "";
@@ -356,7 +447,7 @@ function formatDate(dateStr) {
         const parts = dateStr.split(" ");
         const timePart = parts[1] || "";
         const timeSubparts = timePart.split(":");
-        return `${timeSubparts[0]}:${timeSubparts[1]}`;
+        return `${parts[0]} ${timeSubparts[0]}:${timeSubparts[1]}`;
     } catch (error) {
         return dateStr;
     }
@@ -367,7 +458,6 @@ function showReturnNotification(bookId, bookTitle, studentName) {
     btnNotifyReview.setAttribute("data-book-id", bookId);
     btnNotifyReview.setAttribute("data-book-title", bookTitle);
     notificationBar.classList.remove("hidden");
-
     setTimeout(hideNotification, 12000);
 }
 
@@ -413,22 +503,22 @@ async function submitReview(event) {
         const response = await fetch(`${API_BASE}/api/avaliar`, {
             method: "POST",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             },
             body: JSON.stringify({
                 livro_id: bookId,
                 nota: rating,
-                comentario: comment
-            })
+                comentario: comment,
+            }),
         });
 
         if (!response.ok) {
             const err = await response.json();
-            throw new Error(err.error || "Erro ao salvar avaliacao");
+            throw new Error(err.error || "Erro ao salvar avaliacao.");
         }
 
         hideModal();
-        fetchDashboardData();
+        await fetchDashboardData();
         alert("Avaliacao salva com sucesso.");
     } catch (error) {
         alert(`Falha ao salvar avaliacao: ${error.message}`);
@@ -436,23 +526,20 @@ async function submitReview(event) {
 }
 
 async function resetDatabase() {
-    if (!confirm("Tem certeza que deseja resetar o banco de dados?")) {
+    if (!confirm("Tem certeza que deseja resetar o banco de dados de demonstracao?")) {
         return;
     }
 
     try {
-        const response = await fetch(`${API_BASE}/api/reset`, {
-            method: "POST"
-        });
-
+        const response = await fetch(`${API_BASE}/api/reset`, { method: "POST" });
         if (!response.ok) {
-            throw new Error("Falha ao resetar");
+            throw new Error("Falha ao resetar o banco de dados.");
         }
 
         mockResult.className = "mock-result";
         mockResult.textContent = "Banco reinicializado com os dados padrao.";
+        await fetchDashboardData();
         alert("Banco de dados reinicializado com sucesso.");
-        fetchDashboardData();
     } catch (error) {
         alert(`Erro ao resetar o banco de dados: ${error.message}`);
     }

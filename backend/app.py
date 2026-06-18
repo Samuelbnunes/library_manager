@@ -19,6 +19,18 @@ LOAN_TIMEOUT_SECONDS = int(os.environ.get("LOAN_TIMEOUT_SECONDS", "15"))
 DEFAULT_SERIAL_PORT = os.environ.get("SERIAL_PORT", "MOCK")
 
 
+def build_dashboard_payload():
+    data = database.get_dashboard_data(LOAN_TIMEOUT_SECONDS)
+    data["serial_connected"] = serial_monitor.connected if serial_monitor is not None else False
+    data["serial_mode"] = "mock" if serial_monitor and serial_monitor.mock_mode else "hardware"
+    data["mock_enabled"] = bool(serial_monitor and serial_monitor.mock_mode)
+    data["loan_timeout_seconds"] = LOAN_TIMEOUT_SECONDS
+    data["active_student"] = (
+        serial_monitor.get_active_student_summary() if serial_monitor is not None else None
+    )
+    return data
+
+
 def check_overdue_loans_daemon(monitor_instance):
     print("[OverdueDaemon] Daemon de verificacao de atrasos iniciado.")
     while True:
@@ -27,6 +39,17 @@ def check_overdue_loans_daemon(monitor_instance):
             if overdue_loans:
                 for loan in overdue_loans:
                     database.mark_loan_overdue(loan["id"], loan["livro_id"])
+                    database.log_event(
+                        event_type="loan_overdue",
+                        status="warning",
+                        source="backend",
+                        aluno_id=loan["aluno_id"],
+                        livro_id=loan["livro_id"],
+                        message=(
+                            f"Emprestimo {loan['id']} do livro {loan['livro_id']} "
+                            f"marcado como atrasado apos {LOAN_TIMEOUT_SECONDS}s."
+                        ),
+                    )
                     print(
                         f"[OverdueDaemon] Emprestimo {loan['id']} do livro {loan['livro_id']} "
                         f"marcado como ATRASADO (>{LOAN_TIMEOUT_SECONDS}s)."
@@ -35,6 +58,12 @@ def check_overdue_loans_daemon(monitor_instance):
                     if monitor_instance and monitor_instance.connected:
                         monitor_instance.write_char("R")
         except Exception as exc:
+            database.log_event(
+                event_type="daemon_error",
+                status="error",
+                source="backend",
+                message=f"Erro no daemon de atrasos: {exc}",
+            )
             print(f"[OverdueDaemon] Erro ao processar emprestimos atrasados: {exc}")
 
         time.sleep(2)
@@ -43,12 +72,30 @@ def check_overdue_loans_daemon(monitor_instance):
 @app.route("/api/dashboard", methods=["GET"])
 def get_dashboard():
     try:
-        data = database.get_dashboard_data()
-        data["serial_connected"] = serial_monitor.connected if serial_monitor is not None else False
-        data["serial_mode"] = "mock" if serial_monitor and serial_monitor.mock_mode else "hardware"
-        data["mock_enabled"] = bool(serial_monitor and serial_monitor.mock_mode)
-        data["loan_timeout_seconds"] = LOAN_TIMEOUT_SECONDS
-        return jsonify(data), 200
+        return jsonify(build_dashboard_payload()), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/acervo", methods=["GET"])
+def get_collection():
+    try:
+        payload = build_dashboard_payload()
+        return jsonify(
+            {
+                "counts": payload["counts"],
+                "acervo": payload["acervo"],
+                "atrasos": payload["atrasos"],
+            }
+        ), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/eventos", methods=["GET"])
+def get_events():
+    try:
+        return jsonify({"eventos": database.get_recent_events(25)}), 200
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
@@ -75,6 +122,14 @@ def add_review():
             return jsonify({"error": "A nota deve ser um numero inteiro entre 1 e 5."}), 400
 
         database.add_review(livro_id, nota_int, comentario)
+        database.log_event(
+            event_type="review_created",
+            status="success",
+            source="dashboard",
+            livro_id=livro_id,
+            message=f"Avaliacao registrada para o livro {livro_id}.",
+            metadata={"nota": nota_int},
+        )
         return jsonify({"success": True, "message": "Avaliacao salva com sucesso."}), 201
 
     except ValueError as exc:
@@ -87,6 +142,9 @@ def add_review():
 def reset_db():
     try:
         database.reset_db_with_fake_data()
+        if serial_monitor is not None:
+            serial_monitor.active_student_id = None
+            serial_monitor.active_student_time = 0.0
         return jsonify({"success": True, "message": "Banco reinicializado com dados padrao."}), 200
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
@@ -99,6 +157,14 @@ def trigger_delay_check():
         count = len(overdue_loans)
         for loan in overdue_loans:
             database.mark_loan_overdue(loan["id"], loan["livro_id"])
+            database.log_event(
+                event_type="loan_overdue",
+                status="warning",
+                source="dashboard",
+                aluno_id=loan["aluno_id"],
+                livro_id=loan["livro_id"],
+                message=f"Emprestimo do livro {loan['livro_id']} marcado manualmente como atrasado.",
+            )
             if serial_monitor and serial_monitor.connected:
                 serial_monitor.write_char("R")
         return jsonify(
@@ -119,11 +185,9 @@ def mock_scan():
 
     try:
         data = request.get_json() or {}
-        type_prefix = (data.get("type") or "").strip().upper()
+        type_prefix = (data.get("type") or "RFID").strip().upper()
         rfid_id = (data.get("rfid_id") or "").strip().upper()
 
-        if type_prefix not in {"ALUNO", "LIVRO"}:
-            return jsonify({"error": "O campo 'type' deve ser ALUNO ou LIVRO."}), 400
         if not rfid_id:
             return jsonify({"error": "O campo 'rfid_id' e obrigatorio."}), 400
 

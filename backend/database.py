@@ -1,3 +1,4 @@
+import json
 import os
 import sqlite3
 from datetime import datetime
@@ -5,9 +6,9 @@ from datetime import datetime
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "library.db")
 
 DEFAULT_ALUNOS = [
-    ("43 E1 5C FE", "Ana Silva", "20260001"),
-    ("83 6C C1 02", "Bruno Santos", "20260002"),
-    ("33 14 11 FF", "Carlos Oliveira", "20260003"),
+    ("43 E1 5C FE", "Bernardo Heckler", "20260001"),
+    ("83 6C C1 02", "Gabriel Rico", "20260002"),
+    ("33 14 11 FF", "Bento Martins", "20260003"),
 ]
 
 DEFAULT_LIVROS = [
@@ -22,6 +23,10 @@ def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def now_str():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def init_db():
@@ -76,6 +81,23 @@ def init_db():
         """
     )
 
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS eventos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            status TEXT NOT NULL,
+            source TEXT NOT NULL,
+            rfid_id TEXT,
+            aluno_id TEXT,
+            livro_id TEXT,
+            message TEXT NOT NULL,
+            metadata_json TEXT
+        )
+        """
+    )
+
     conn.commit()
     conn.close()
 
@@ -118,6 +140,7 @@ def reset_db_with_fake_data():
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    cursor.execute("DROP TABLE IF EXISTS eventos")
     cursor.execute("DROP TABLE IF EXISTS avaliacoes")
     cursor.execute("DROP TABLE IF EXISTS emprestimos")
     cursor.execute("DROP TABLE IF EXISTS livros")
@@ -132,6 +155,74 @@ def reset_db_with_fake_data():
     _seed_default_data(cursor)
     conn.commit()
     conn.close()
+
+    log_event(
+        event_type="system",
+        status="success",
+        source="backend",
+        message="Banco reinicializado com os dados padrao de demonstracao.",
+    )
+
+
+def log_event(event_type, status, source, message, rfid_id=None, aluno_id=None, livro_id=None, metadata=None):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO eventos (
+            created_at, event_type, status, source, rfid_id, aluno_id, livro_id, message, metadata_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            now_str(),
+            event_type,
+            status,
+            source,
+            rfid_id,
+            aluno_id,
+            livro_id,
+            message,
+            json.dumps(metadata, ensure_ascii=True) if metadata is not None else None,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_recent_events(limit=15):
+    conn = get_db_connection()
+    rows = conn.execute(
+        """
+        SELECT
+            e.id,
+            e.created_at,
+            e.event_type,
+            e.status,
+            e.source,
+            e.rfid_id,
+            e.aluno_id,
+            e.livro_id,
+            e.message,
+            e.metadata_json,
+            a.nome AS aluno_nome,
+            l.titulo AS livro_titulo
+        FROM eventos e
+        LEFT JOIN alunos a ON e.aluno_id = a.id_rfid
+        LEFT JOIN livros l ON e.livro_id = l.id_rfid
+        ORDER BY e.id DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    conn.close()
+
+    events = []
+    for row in rows:
+        item = dict(row)
+        item["metadata"] = json.loads(item["metadata_json"]) if item["metadata_json"] else None
+        item.pop("metadata_json", None)
+        events.append(item)
+    return events
 
 
 def get_aluno(id_rfid):
@@ -148,6 +239,18 @@ def get_livro(id_rfid):
     return livro
 
 
+def classify_rfid(rfid_id):
+    aluno = get_aluno(rfid_id)
+    if aluno:
+        return "ALUNO", aluno
+
+    livro = get_livro(rfid_id)
+    if livro:
+        return "LIVRO", livro
+
+    return "DESCONHECIDO", None
+
+
 def get_active_loan_for_book(livro_id):
     conn = get_db_connection()
     loan = conn.execute(
@@ -161,11 +264,10 @@ def get_active_loan_for_book(livro_id):
 def create_loan(aluno_id, livro_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     cursor.execute(
         "INSERT INTO emprestimos (aluno_id, livro_id, data_emprestimo, status) VALUES (?, ?, ?, 'ativo')",
-        (aluno_id, livro_id, now_str),
+        (aluno_id, livro_id, now_str()),
     )
     cursor.execute(
         "UPDATE livros SET status = 'emprestado' WHERE id_rfid = ?",
@@ -178,11 +280,10 @@ def create_loan(aluno_id, livro_id):
 def return_loan(loan_id, book_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     cursor.execute(
         "UPDATE emprestimos SET status = 'finalizado', data_devolucao = ? WHERE id = ?",
-        (now_str, loan_id),
+        (now_str(), loan_id),
     )
     cursor.execute(
         "UPDATE livros SET status = 'disponivel' WHERE id_rfid = ?",
@@ -238,7 +339,20 @@ def get_mock_catalog():
         "SELECT id_rfid, nome, matricula FROM alunos ORDER BY nome ASC"
     ).fetchall()
     livros = conn.execute(
-        "SELECT id_rfid, titulo, autor, status FROM livros ORDER BY titulo ASC"
+        """
+        SELECT
+            l.id_rfid,
+            l.titulo,
+            l.autor,
+            l.status,
+            COALESCE(a.nome, '') AS aluno_atual
+        FROM livros l
+        LEFT JOIN emprestimos e
+            ON e.livro_id = l.id_rfid
+            AND e.status IN ('ativo', 'atrasado')
+        LEFT JOIN alunos a ON e.aluno_id = a.id_rfid
+        ORDER BY l.titulo ASC
+        """
     ).fetchall()
     conn.close()
 
@@ -248,7 +362,69 @@ def get_mock_catalog():
     }
 
 
-def get_dashboard_data():
+def get_collection_overview():
+    conn = get_db_connection()
+    rows = conn.execute(
+        """
+        SELECT
+            l.id_rfid,
+            l.titulo,
+            l.autor,
+            l.status,
+            COALESCE(a.nome, NULL) AS aluno_nome,
+            COALESCE(e.data_emprestimo, NULL) AS data_emprestimo,
+            COALESCE(e.status, NULL) AS emprestimo_status
+        FROM livros l
+        LEFT JOIN emprestimos e
+            ON e.livro_id = l.id_rfid
+            AND e.status IN ('ativo', 'atrasado')
+        LEFT JOIN alunos a ON e.aluno_id = a.id_rfid
+        ORDER BY
+            CASE l.status
+                WHEN 'atrasado' THEN 0
+                WHEN 'emprestado' THEN 1
+                ELSE 2
+            END,
+            l.titulo ASC
+        """
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def get_overdue_details(seconds_limit):
+    conn = get_db_connection()
+    rows = conn.execute(
+        """
+        SELECT
+            e.id,
+            e.aluno_id,
+            e.livro_id,
+            e.data_emprestimo,
+            a.nome AS aluno_nome,
+            a.matricula AS aluno_matricula,
+            l.titulo AS livro_titulo,
+            l.autor AS livro_autor
+        FROM emprestimos e
+        JOIN alunos a ON e.aluno_id = a.id_rfid
+        JOIN livros l ON e.livro_id = l.id_rfid
+        WHERE e.status = 'atrasado'
+        ORDER BY e.id DESC
+        """
+    ).fetchall()
+    conn.close()
+
+    details = []
+    now = datetime.now()
+    for row in rows:
+        item = dict(row)
+        data_emp = datetime.strptime(item["data_emprestimo"], "%Y-%m-%d %H:%M:%S")
+        item["seconds_overdue"] = max(int((now - data_emp).total_seconds()) - seconds_limit, 0)
+        details.append(item)
+    return details
+
+
+def get_dashboard_data(seconds_limit):
     conn = get_db_connection()
 
     counts = conn.execute(
@@ -317,7 +493,7 @@ def get_dashboard_data():
         FROM livros l
         LEFT JOIN emprestimos e ON l.id_rfid = e.livro_id
         GROUP BY l.id_rfid
-        ORDER BY emprestimos_count DESC
+        ORDER BY emprestimos_count DESC, l.titulo ASC
         """
     ).fetchall()
     top_borrowed_list = [dict(row) for row in top_borrowed]
@@ -347,4 +523,7 @@ def get_dashboard_data():
         "ranking_emprestimos": top_borrowed_list,
         "ranking_avaliacoes": top_rated_list,
         "mock_data": get_mock_catalog(),
+        "acervo": get_collection_overview(),
+        "atrasos": get_overdue_details(seconds_limit),
+        "eventos": get_recent_events(),
     }
