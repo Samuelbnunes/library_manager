@@ -3,17 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LibraryManager | Dashboard de Smart Campus</title>
+    <title>LibraryManager | Dashboard Smart Campus</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Main App Container -->
     <div class="app-container">
-        
-        <!-- Header -->
         <header class="app-header">
             <div class="header-logo">
                 <span class="logo-emoji">📚</span>
@@ -22,7 +19,7 @@
                     <p class="subtitle">Smart Campus Library System</p>
                 </div>
             </div>
-            
+
             <div class="header-status">
                 <div id="status-server" class="status-pill offline">
                     <span class="pulse-dot"></span>
@@ -32,32 +29,28 @@
                     <span class="pulse-dot"></span>
                     <span class="status-label">RFID Arduino: Desconectado</span>
                 </div>
-                <button id="btn-reset" class="btn btn-danger" title="Reinicializa o banco de dados para os valores padrão">
-                    🔄 Resetar DB
+                <button id="btn-reset" class="btn btn-danger" title="Reinicializa o banco de dados de demonstracao">
+                    Resetar DB
                 </button>
             </div>
         </header>
 
-        <!-- Notification Bar (Ex: Devolução recente detectada) -->
         <div id="notification-bar" class="notification-bar hidden">
-            <span id="notification-message">Um livro foi devolvido!</span>
-            <button id="btn-notify-review" class="btn btn-primary btn-sm">Avaliar Livro</button>
+            <span id="notification-message">Um livro foi devolvido.</span>
+            <button id="btn-notify-review" class="btn btn-primary btn-sm">Avaliar livro</button>
             <button id="btn-notify-close" class="btn-close">&times;</button>
         </div>
 
-        <!-- Dashboard Content Grid -->
         <main class="dashboard-content">
-            
-            <!-- Cards de Métricas Rápidas -->
             <section class="metrics-grid">
                 <div class="metric-card card-disponivel">
                     <div class="metric-icon">🟢</div>
                     <div class="metric-info">
-                        <h3>Disponíveis</h3>
+                        <h3>Disponiveis</h3>
                         <p id="metric-disponiveis" class="metric-value">-</p>
                     </div>
                 </div>
-                
+
                 <div class="metric-card card-emprestado">
                     <div class="metric-icon">🔵</div>
                     <div class="metric-info">
@@ -65,33 +58,81 @@
                         <p id="metric-emprestados" class="metric-value">-</p>
                     </div>
                 </div>
-                
+
                 <div class="metric-card card-atraso" id="metric-card-atraso">
                     <div class="metric-icon">🔴</div>
                     <div class="metric-info">
-                        <h3>Em Atraso</h3>
+                        <h3>Em atraso</h3>
                         <p id="metric-atrasados" class="metric-value">-</p>
                     </div>
                 </div>
             </section>
 
-            <!-- Grid Principal do Dashboard (2 Colunas) -->
+            <section class="status-grid">
+                <section class="content-card compact-card">
+                    <div class="card-header">
+                        <h2>Aluno ativo</h2>
+                    </div>
+                    <div id="active-student-card" class="state-card neutral">
+                        Nenhum aluno identificado no momento.
+                    </div>
+                </section>
+
+                <section class="content-card compact-card">
+                    <div class="card-header">
+                        <h2>Alerta de atrasos</h2>
+                    </div>
+                    <div id="overdue-summary-card" class="state-card neutral">
+                        Nenhum emprestimo atrasado agora.
+                    </div>
+                </section>
+            </section>
+
+            <section class="content-card hidden" id="mock-panel">
+                <div class="card-header">
+                    <div>
+                        <h2>Modo MOCK para desenvolvimento</h2>
+                        <p class="panel-subtitle" id="mock-panel-subtitle">
+                            Simule leituras RFID sem Raspberry Pi ou Arduino conectados.
+                        </p>
+                    </div>
+                </div>
+                <div class="mock-grid">
+                    <div>
+                        <h3 class="mock-group-title">Ler como aluno</h3>
+                        <div id="mock-students" class="mock-button-list"></div>
+                    </div>
+                    <div>
+                        <h3 class="mock-group-title">Ler como livro</h3>
+                        <div id="mock-books" class="mock-button-list"></div>
+                    </div>
+                    <div>
+                        <h3 class="mock-group-title">Leitura generica</h3>
+                        <div id="mock-generic" class="mock-button-list"></div>
+                    </div>
+                </div>
+                <div id="mock-result" class="mock-result">
+                    Escolha um aluno e depois um livro para simular emprestimos e devolucoes.
+                </div>
+            </section>
+
             <div class="main-layout-grid">
-                
-                <!-- Coluna Esquerda: Listagens e Histórico -->
                 <div class="layout-main-column">
-                    
-                    <!-- Seção do Acervo -->
                     <section class="content-card">
                         <div class="card-header">
-                            <h2>Status Atual do Acervo</h2>
+                            <div>
+                                <h2>Consulta do acervo</h2>
+                                <p class="panel-subtitle">
+                                    Visao consolidada do acervo, com status, aluno responsavel e RFID.
+                                </p>
+                            </div>
                             <div class="filter-controls">
-                                <input type="text" id="search-input" placeholder="Buscar título ou autor..." class="form-control">
+                                <input type="text" id="search-input" placeholder="Buscar titulo ou autor..." class="form-control">
                                 <select id="status-filter" class="form-control">
-                                    <option value="todos">Todos os Status</option>
-                                    <option value="disponivel">Disponíveis</option>
+                                    <option value="todos">Todos os status</option>
+                                    <option value="disponivel">Disponiveis</option>
                                     <option value="emprestado">Emprestados</option>
-                                    <option value="atrasado">Em Atraso</option>
+                                    <option value="atrasado">Em atraso</option>
                                 </select>
                             </div>
                         </div>
@@ -99,92 +140,100 @@
                             <table class="data-table" id="books-table">
                                 <thead>
                                     <tr>
-                                        <th>Título</th>
+                                        <th>Titulo</th>
                                         <th>Autor</th>
                                         <th>RFID</th>
                                         <th>Status</th>
-                                        <th>Ações</th>
+                                        <th>Com aluno</th>
+                                        <th>Acoes</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
-                                        <td colspan="5" class="table-placeholder">Carregando acervo...</td>
+                                        <td colspan="6" class="table-placeholder">Carregando acervo...</td>
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
                     </section>
 
-                    <!-- Seção de Histórico de Movimentações -->
                     <section class="content-card">
                         <div class="card-header">
-                            <h2>Histórico de Movimentações Recentes</h2>
+                            <h2>Atrasos em destaque</h2>
                         </div>
-                        <div class="timeline-container" id="timeline-history">
-                            <p class="timeline-placeholder">Carregando histórico...</p>
+                        <div id="overdue-list" class="stack-list">
+                            <p class="timeline-placeholder">Nenhum atraso registrado.</p>
                         </div>
                     </section>
 
-                    <!-- Seção de Avaliações e Feedbacks -->
                     <section class="content-card">
                         <div class="card-header">
-                            <h2>Feedbacks dos Alunos</h2>
+                            <h2>Historico recente</h2>
+                        </div>
+                        <div class="timeline-container" id="timeline-history">
+                            <p class="timeline-placeholder">Carregando historico...</p>
+                        </div>
+                    </section>
+
+                    <section class="content-card">
+                        <div class="card-header">
+                            <h2>Feedbacks dos alunos</h2>
                         </div>
                         <div class="reviews-grid" id="reviews-container">
                             <p class="reviews-placeholder">Carregando feedbacks...</p>
                         </div>
                     </section>
-
                 </div>
 
-                <!-- Coluna Direita: Rankings Laterais -->
                 <div class="layout-sidebar-column">
-                    
-                    <!-- Top Livros Emprestados -->
                     <section class="content-card sidebar-card">
                         <div class="card-header">
-                            <h2>🔥 Mais Emprestados</h2>
+                            <h2>Eventos do sistema</h2>
+                        </div>
+                        <div id="events-list" class="events-list">
+                            <p class="ranking-placeholder">Carregando eventos...</p>
+                        </div>
+                    </section>
+
+                    <section class="content-card sidebar-card">
+                        <div class="card-header">
+                            <h2>Mais emprestados</h2>
                         </div>
                         <ol class="ranking-list" id="ranking-borrowed">
                             <li class="ranking-placeholder">Carregando ranking...</li>
                         </ol>
                     </section>
 
-                    <!-- Top Livros Bem Avaliados -->
                     <section class="content-card sidebar-card">
                         <div class="card-header">
-                            <h2>⭐ Melhor Avaliados</h2>
+                            <h2>Melhor avaliados</h2>
                         </div>
                         <ol class="ranking-list" id="ranking-rated">
                             <li class="ranking-placeholder">Carregando ranking...</li>
                         </ol>
                     </section>
-
                 </div>
-
             </div>
-
         </main>
     </div>
 
-    <!-- Modal de Avaliar Livro -->
     <div id="review-modal" class="modal-overlay hidden">
         <div class="modal-card">
             <div class="modal-header">
-                <h2>Avaliar Livro 🌟</h2>
+                <h2>Avaliar livro</h2>
                 <button id="btn-modal-close" class="btn-close-large">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="review-form">
                     <input type="hidden" id="form-book-id">
-                    
+
                     <div class="form-group">
                         <label for="form-book-title">Livro</label>
                         <input type="text" id="form-book-title" readonly class="form-control-readonly">
                     </div>
 
                     <div class="form-group">
-                        <label>Sua Nota</label>
+                        <label>Sua nota</label>
                         <div class="star-rating" id="form-stars">
                             <span class="star" data-rating="1">★</span>
                             <span class="star" data-rating="2">★</span>
@@ -196,13 +245,13 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="form-comment">Comentário</label>
-                        <textarea id="form-comment" rows="4" placeholder="O que você achou deste livro?" class="form-control" required></textarea>
+                        <label for="form-comment">Comentario</label>
+                        <textarea id="form-comment" rows="4" placeholder="O que voce achou deste livro?" class="form-control" required></textarea>
                     </div>
 
                     <div class="form-actions">
                         <button type="button" id="btn-modal-cancel" class="btn btn-secondary">Cancelar</button>
-                        <button type="submit" class="btn btn-success">Salvar Avaliação</button>
+                        <button type="submit" class="btn btn-success">Salvar avaliacao</button>
                     </div>
                 </form>
             </div>

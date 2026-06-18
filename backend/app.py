@@ -9,16 +9,35 @@ from flask_cors import CORS
 import database
 from serial_monitor import SerialMonitor
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 15fc7a7f59f8ac08ff8ce164b226881f2be7e4bb
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
 serial_monitor = None
+LOAN_TIMEOUT_SECONDS = int(os.environ.get("LOAN_TIMEOUT_SECONDS", "15"))
+DEFAULT_SERIAL_PORT = os.environ.get("SERIAL_PORT", "MOCK")
+
+
+def build_dashboard_payload():
+    data = database.get_dashboard_data(LOAN_TIMEOUT_SECONDS)
+    data["serial_connected"] = serial_monitor.connected if serial_monitor is not None else False
+    data["serial_mode"] = "mock" if serial_monitor and serial_monitor.mock_mode else "hardware"
+    data["mock_enabled"] = bool(serial_monitor and serial_monitor.mock_mode)
+    data["loan_timeout_seconds"] = LOAN_TIMEOUT_SECONDS
+    data["active_student"] = (
+        serial_monitor.get_active_student_summary() if serial_monitor is not None else None
+    )
+    return data
+
 
 
 def check_overdue_loans_daemon(monitor_instance):
+<<<<<<< HEAD
     """Rotina em segundo plano que verifica emprestimos em atraso a cada 2 segundos."""
     print("[OverdueDaemon] Daemon de verificacao de atrasos iniciado.")
     while True:
@@ -33,10 +52,46 @@ def check_overdue_loans_daemon(monitor_instance):
                         monitor_instance.write_char("R")
         except Exception as e:
             print(f"[OverdueDaemon] Erro ao processar emprestimos atrasados: {e}")
+=======
+    print("[OverdueDaemon] Daemon de verificacao de atrasos iniciado.")
+    while True:
+        try:
+            overdue_loans = database.get_overdue_loans(LOAN_TIMEOUT_SECONDS)
+            if overdue_loans:
+                for loan in overdue_loans:
+                    database.mark_loan_overdue(loan["id"], loan["livro_id"])
+                    database.log_event(
+                        event_type="loan_overdue",
+                        status="warning",
+                        source="backend",
+                        aluno_id=loan["aluno_id"],
+                        livro_id=loan["livro_id"],
+                        message=(
+                            f"Emprestimo {loan['id']} do livro {loan['livro_id']} "
+                            f"marcado como atrasado apos {LOAN_TIMEOUT_SECONDS}s."
+                        ),
+                    )
+                    print(
+                        f"[OverdueDaemon] Emprestimo {loan['id']} do livro {loan['livro_id']} "
+                        f"marcado como ATRASADO (>{LOAN_TIMEOUT_SECONDS}s)."
+                    )
+
+                    if monitor_instance and monitor_instance.connected:
+                        monitor_instance.write_char("R")
+        except Exception as exc:
+            database.log_event(
+                event_type="daemon_error",
+                status="error",
+                source="backend",
+                message=f"Erro no daemon de atrasos: {exc}",
+            )
+            print(f"[OverdueDaemon] Erro ao processar emprestimos atrasados: {exc}")
+>>>>>>> 15fc7a7f59f8ac08ff8ce164b226881f2be7e4bb
 
         time.sleep(2)
 
 
+<<<<<<< HEAD
 @app.route("/", methods=["GET"])
 def root():
     return jsonify(
@@ -65,6 +120,39 @@ def get_dashboard():
         return jsonify({"error": str(e)}), 500
 
 
+=======
+@app.route("/api/dashboard", methods=["GET"])
+def get_dashboard():
+    try:
+        return jsonify(build_dashboard_payload()), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/acervo", methods=["GET"])
+def get_collection():
+    try:
+        payload = build_dashboard_payload()
+        return jsonify(
+            {
+                "counts": payload["counts"],
+                "acervo": payload["acervo"],
+                "atrasos": payload["atrasos"],
+            }
+        ), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/eventos", methods=["GET"])
+def get_events():
+    try:
+        return jsonify({"eventos": database.get_recent_events(25)}), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+>>>>>>> 15fc7a7f59f8ac08ff8ce164b226881f2be7e4bb
 @app.route("/api/avaliar", methods=["POST"])
 def add_review():
     try:
@@ -85,6 +173,7 @@ def add_review():
                 raise ValueError()
         except ValueError:
             return jsonify({"error": "A nota deve ser um numero inteiro entre 1 e 5."}), 400
+<<<<<<< HEAD
 
         database.add_review(livro_id, nota_int, comentario)
         return jsonify({"success": True, "message": "Avaliacao salva com sucesso."}), 201
@@ -94,24 +183,56 @@ def add_review():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+=======
+
+        database.add_review(livro_id, nota_int, comentario)
+        database.log_event(
+            event_type="review_created",
+            status="success",
+            source="dashboard",
+            livro_id=livro_id,
+            message=f"Avaliacao registrada para o livro {livro_id}.",
+            metadata={"nota": nota_int},
+        )
+        return jsonify({"success": True, "message": "Avaliacao salva com sucesso."}), 201
+
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+>>>>>>> 15fc7a7f59f8ac08ff8ce164b226881f2be7e4bb
 
 @app.route("/api/reset", methods=["POST"])
 def reset_db():
     try:
         database.reset_db_with_fake_data()
+<<<<<<< HEAD
         return jsonify({"success": True, "message": "Banco de dados reinicializado e carregado com dados ficticios."}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+=======
+        if serial_monitor is not None:
+            serial_monitor.active_student_id = None
+            serial_monitor.active_student_time = 0.0
+        return jsonify({"success": True, "message": "Banco reinicializado com dados padrao."}), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+>>>>>>> 15fc7a7f59f8ac08ff8ce164b226881f2be7e4bb
 
 
 @app.route("/api/check_delay", methods=["POST"])
 def trigger_delay_check():
+<<<<<<< HEAD
     """Rota para disparar manualmente a verificacao de atraso de 15 segundos."""
+=======
+>>>>>>> 15fc7a7f59f8ac08ff8ce164b226881f2be7e4bb
     try:
-        overdue_loans = database.get_overdue_loans(15)
+        overdue_loans = database.get_overdue_loans(LOAN_TIMEOUT_SECONDS)
         count = len(overdue_loans)
         for loan in overdue_loans:
             database.mark_loan_overdue(loan["id"], loan["livro_id"])
+<<<<<<< HEAD
             if serial_monitor and serial_monitor.connected:
                 serial_monitor.write_char("R")
         return jsonify({"success": True, "overdue_count": count, "message": f"{count} emprestimo(s) marcados como atrasado."}), 200
@@ -119,14 +240,68 @@ def trigger_delay_check():
         return jsonify({"error": str(e)}), 500
 
 
+=======
+            database.log_event(
+                event_type="loan_overdue",
+                status="warning",
+                source="dashboard",
+                aluno_id=loan["aluno_id"],
+                livro_id=loan["livro_id"],
+                message=f"Emprestimo do livro {loan['livro_id']} marcado manualmente como atrasado.",
+            )
+            if serial_monitor and serial_monitor.connected:
+                serial_monitor.write_char("R")
+        return jsonify(
+            {
+                "success": True,
+                "overdue_count": count,
+                "message": f"{count} emprestimo(s) marcados como atrasado.",
+            }
+        ), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/mock/scan", methods=["POST"])
+def mock_scan():
+    if not serial_monitor or not serial_monitor.mock_mode:
+        return jsonify({"error": "O modo mock nao esta habilitado."}), 400
+
+    try:
+        data = request.get_json() or {}
+        type_prefix = (data.get("type") or "RFID").strip().upper()
+        rfid_id = (data.get("rfid_id") or "").strip().upper()
+
+        if not rfid_id:
+            return jsonify({"error": "O campo 'rfid_id' e obrigatorio."}), 400
+
+        result = serial_monitor.simulate_scan(type_prefix, rfid_id)
+        return jsonify(result), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+>>>>>>> 15fc7a7f59f8ac08ff8ce164b226881f2be7e4bb
 database.init_db()
+database.ensure_seed_data()
 
 if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
+<<<<<<< HEAD
     serial_port = os.environ.get("SERIAL_PORT") or None
     serial_monitor = SerialMonitor(port=serial_port, baudrate=9600)
     serial_monitor.start()
 
     overdue_thread = threading.Thread(target=check_overdue_loans_daemon, args=(serial_monitor,), daemon=True)
+=======
+    serial_monitor = SerialMonitor(port=DEFAULT_SERIAL_PORT, baudrate=9600)
+    serial_monitor.start()
+
+    overdue_thread = threading.Thread(
+        target=check_overdue_loans_daemon,
+        args=(serial_monitor,),
+        daemon=True,
+    )
+>>>>>>> 15fc7a7f59f8ac08ff8ce164b226881f2be7e4bb
     overdue_thread.start()
 
 
