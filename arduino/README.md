@@ -1,22 +1,13 @@
-# Library Manager
+# Arduino RFID
 
-Sistema de biblioteca com RFID composto por tres blocos:
+Firmware do Arduino Uno para leitura RFID com `MFRC522`, `LED Verde`, `LED Vermelho` e `Buzzer`.
 
-1. `arduino/`: firmware do Arduino Uno com leitor MFRC522, LEDs e buzzer.
-2. `backend/`: API Flask + SQLite + monitor serial via PySerial.
-3. `web/`: dashboard em HTML, CSS e JavaScript.
+## Estrutura
 
-## Arquitetura recomendada
+- `rfid_reader/rfid_reader.ino`: firmware principal.
+- `bin/arduino-cli`: opcional, caso você mantenha o executável localmente nessa pasta.
 
-Para Raspberry Pi, o fluxo correto e:
-
-1. Compilar e gravar o firmware no Arduino em um PC ou notebook.
-2. Conectar o Arduino ja gravado na Raspberry por USB.
-3. Rodar na Raspberry apenas o backend Flask, o banco SQLite e o dashboard web.
-
-Nao e necessario "rodar o Arduino na Raspberry". A Raspberry apenas consome a porta serial USB do Arduino.
-
-## Hardware
+## Ligações
 
 | Componente | Pino Arduino |
 | --- | --- |
@@ -31,152 +22,87 @@ Nao e necessario "rodar o Arduino na Raspberry". A Raspberry apenas consome a po
 | LED Vermelho | `3` |
 | Buzzer | `4` |
 
-Observacao: o RC522 deve ser alimentado em `3.3V`, nunca em `5V`.
+*Observação: O módulo RC522 deve ser alimentado na saída de `3.3V` do Arduino, nunca na de `5V`.*
 
-## Gravar o firmware no Arduino
+---
 
-Consulte o passo a passo detalhado em [arduino/README.md](/abs/path/c:/Users/User/Documents/BernardoFaculdade/library_manager/arduino/README.md:1).
+## Como Compilar e Gravar o Firmware
 
-Resumo:
+### Windows (PowerShell)
 
-### Windows PowerShell
+1. **Acesse a pasta do Arduino:**
+   ```powershell
+   cd arduino
+   ```
 
-```powershell
-cd arduino
-.\bin\arduino-cli core install arduino:avr
-.\bin\arduino-cli lib install MFRC522
-.\bin\arduino-cli compile --fqbn arduino:avr:uno rfid_reader
-.\bin\arduino-cli upload -p COM3 --fqbn arduino:avr:uno rfid_reader
-```
+2. **Instale as dependências da placa e do leitor RFID:**
+   ```powershell
+   .\bin\arduino-cli core install arduino:avr
+   .\bin\arduino-cli lib install MFRC522
+   ```
 
-## Rodar o backend no Windows
+3. **Compile o código:**
+   ```powershell
+   .\bin\arduino-cli compile --fqbn arduino:avr:uno rfid_reader
+   ```
 
-```powershell
-cd backend
-python -m venv venv
-.\venv\Scripts\activate
-pip install -r requirements.txt
-```
+4. **Envie para a placa (substitua `COM3` pela porta do seu Arduino):**
+   ```powershell
+   .\bin\arduino-cli upload -p COM3 --fqbn arduino:avr:uno rfid_reader
+   ```
 
-Crie `backend/.env`:
+5. **Monitore a porta serial:**
+   ```powershell
+   .\bin\arduino-cli monitor -p COM3 -c baudrate=9600
+   ```
 
-```env
-SERIAL_PORT=COM3
-```
+---
 
-Suba o backend:
+### Linux ou Raspberry Pi (Terminal)
 
-```powershell
-python app.py
-```
+Se você preferir compilar diretamente no Raspberry Pi ou em outra máquina Linux:
 
-Testes uteis:
+1. **Acesse a pasta do Arduino:**
+   ```bash
+   cd arduino
+   ```
 
-- `http://127.0.0.1:5000/`
-- `http://127.0.0.1:5000/api/dashboard`
+2. **Baixe o `arduino-cli` correto para a arquitetura do Linux (ex: ARM do Raspberry Pi):**
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+   ```
 
-## Rodar o backend na Raspberry Pi
+3. **Atualize o índice e instale as dependências:**
+   ```bash
+   ./bin/arduino-cli core update-index
+   ./bin/arduino-cli core install arduino:avr
+   ./bin/arduino-cli lib install "MFRC522"
+   ```
 
-### 1. Descobrir a porta serial
+4. **Compile o firmware:**
+   ```bash
+   ./bin/arduino-cli compile --fqbn arduino:avr:uno rfid_reader
+   ```
 
-Com o Arduino conectado por USB:
+5. **Envie para a placa (identifique a porta correta, ex: `/dev/ttyACM0`):**
+   ```bash
+   ./bin/arduino-cli upload -p /dev/ttyACM0 --fqbn arduino:avr:uno rfid_reader
+   ```
 
+6. **Monitore a porta serial:**
+   ```bash
+   ./bin/arduino-cli monitor -p /dev/ttyACM0 -c baudrate=9600
+   ```
+
+#### Como descobrir a porta serial correta no Linux:
 ```bash
 ls /dev/ttyACM*
 ls /dev/ttyUSB*
 dmesg | tail
 ```
 
-As portas mais comuns sao:
+---
 
-- `/dev/ttyACM0`
-- `/dev/ttyUSB0`
+## Observação Importante
 
-### 2. Criar ambiente e instalar dependencias
-
-```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-### 3. Configurar `backend/.env`
-
-Exemplo:
-
-```env
-SERIAL_PORT=/dev/ttyACM0
-```
-
-Se preferir, copie de `backend/.env.example`.
-
-### 4. Subir o backend
-
-```bash
-python3 app.py
-```
-
-### 5. Se houver erro de permissao na serial
-
-```bash
-sudo usermod -aG dialout $USER
-```
-
-Depois faca logout/login ou reinicie a Raspberry.
-
-## O que foi corrigido no backend
-
-- O backend nao assume mais `COM3` como default.
-- O monitor serial tenta autodetectar portas comuns como `/dev/ttyACM0`, `/dev/ttyUSB0` e `COMx`.
-- A rota `/` agora responde `200` com informacoes basicas do servico, evitando `404` ao testar o backend pelo navegador.
-- A rota `/api/dashboard` agora informa tambem a porta serial em uso.
-
-## Rodar o frontend
-
-O frontend e estatico e nao e servido pelo Flask.
-
-Na raiz do projeto:
-
-### Windows
-
-```powershell
-python -m http.server 8000
-```
-
-### Linux / Raspberry
-
-```bash
-python3 -m http.server 8000
-```
-
-Abra:
-
-```text
-http://127.0.0.1:8000/web/
-```
-
-## Validacao rapida ponta a ponta
-
-1. Suba o backend e confirme `http://127.0.0.1:5000/`.
-2. Abra `http://127.0.0.1:5000/api/dashboard` e confira `serial_connected`.
-3. Suba o servidor estatico e abra `http://127.0.0.1:8000/web/`.
-4. Clique em `Resetar DB`.
-5. Aproxime um cartao RFID de aluno.
-6. Aproxime uma tag RFID de livro dentro de 30 segundos.
-7. Aguarde 15 segundos para validar a regra de atraso.
-
-## Tags de teste cadastradas
-
-### Alunos
-
-- `43 E1 5C FE` -> Ana Silva
-- `83 6C C1 02` -> Bruno Santos
-- `33 14 11 FF` -> Carlos Oliveira
-
-### Livros
-
-- `63 6F 2C FE` -> Introducao a Bancos de Dados
-- `43 82 51 FE` -> Docker Pratico
-- `73 BD BF 02` -> Flask Web Development
-- `63 34 63 FB` -> Arquitetura Limpa
+O projeto principal não exige que você compile o firmware do Arduino dentro do Raspberry Pi. A arquitetura recomendada é compilar e gravar no Arduino a partir de um computador pessoal (Windows/macOS) e depois conectar o Arduino pronto à porta USB do Raspberry Pi para que o backend Flask o consuma.

@@ -1,176 +1,55 @@
-# LibraryManager | Smart Campus
+# LibraryManager 📚 — IoT & Smart Campus
 
-LibraryManager e um sistema de gerenciamento de biblioteca com RFID pensado para o contexto de Smart Campus. O projeto integra Arduino, Raspberry Pi, aplicacao Python com Flask, banco SQLite e dashboard web para demonstrar emprestimos, devolucoes, atrasos e feedbacks de livros.
+O **LibraryManager** é uma solução de Internet das Coisas (IoT) desenvolvida para modernizar e otimizar o fluxo de gerenciamento de bibliotecas em ambientes de **Smart Campus** (Campi Inteligentes). Através da integração entre hardware, comunicação serial em tempo real e uma interface web interativa, o sistema automatiza processos cotidianos de empréstimo e devolução de livros, reduzindo filas e melhorando a experiência dos estudantes.
 
-## Arquitetura
+---
 
-O projeto e dividido em tres blocos:
+## 🌟 Principais Recursos e Benefícios
 
-1. `arduino/`
-   Firmware responsavel pela leitura RFID, LEDs e buzzer.
-2. `backend/`
-   API Flask que concentra a regra de negocio, o banco SQLite, a comunicacao serial e o modo MOCK.
-3. `web/`
-   Dashboard web para acompanhar o acervo, aluno ativo, eventos do sistema, atrasos e avaliacoes.
+*   **Identificação RFID Inteligente**: Reconhecimento instantâneo de alunos e livros utilizando tecnologia RFID (MFRC522), eliminando a digitação manual ou leitura lenta de código de barras.
+*   **Feedback Audiovisual em Tempo Real**: O terminal físico (Arduino) emite alertas visuais (LEDs Verde e Vermelho) e sonoros (Buzzer com diferentes frequências) para indicar o sucesso ou falha instantânea de cada operação.
+*   **Controle Inteligente de Prazos**: Sistema automático de monitoramento de prazos (com regra demonstrativa de 15 segundos para alertas rápidos), acionando notificações imediatas na interface caso um empréstimo expire.
+*   **Painel Administrativo Completo (Dashboard)**: Monitoramento dinâmico que exibe o estudante ativo na sessão, acervo disponível, histórico detalhado de logs e um ranking interativo de livros recomendados.
+*   **Engajamento de Leitores**: Sistema integrado para que os alunos avaliem e deixem feedbacks/estrelas para os livros que acabaram de devolver, incentivando a comunidade de leitores do campus.
+*   **Modo Simulação (MOCK)**: Possibilidade de testar toda a lógica do ecossistema e interface web mesmo sem ter o hardware conectado físico, facilitando o desenvolvimento offline.
 
-Fluxo principal:
+---
 
-`Tag RFID -> Arduino -> Serial USB -> Raspberry Pi / Backend Flask -> SQLite -> Dashboard`
+## 🏗️ Arquitetura do Sistema
 
-## O que o sistema entrega hoje
+O projeto é construído em uma arquitetura modular dividida em três pilares principais:
 
-- Leitura de RFID para alunos e livros
-- Emprestimo e devolucao automatizados
-- Regra de atraso em 15 segundos para demonstracao
-- Dashboard com:
-  - aluno ativo
-  - consulta de acervo
-  - alertas de atraso
-  - historico recente
-  - eventos do sistema
-  - ranking de livros
-  - avaliacoes
-- Modo `MOCK` para desenvolver sem hardware fisico
-- Back-end preparado para rodar em Windows, macOS, Ubuntu e Raspberry Pi
-
-## Execucao local sem hardware
-
-O modo recomendado para desenvolvimento em casa e o `MOCK`.
-
-### 1. Criar o ambiente do backend
-
-Windows:
-
-```powershell
-cd backend
-python -m venv venv
-.\venv\Scripts\activate
-pip install -r requirements.txt
-Copy-Item .env.example .env
+```
+[Módulo RFID / Arduino] ---> (Conexão Serial USB) ---> [Backend Flask / SQLite] ---> [Dashboard Web]
 ```
 
-macOS / Ubuntu / Raspberry Pi:
+1.  **Firmware Arduino ([`/arduino`](file:///c:/Users/Samuel/Downloads/library_manager/arduino))**: Desenvolvido em C++, gerencia as leituras do leitor de cartão/tag RFID e controla as respostas físicas (LEDs/Buzzer) baseadas nos comandos enviados pelo servidor.
+2.  **Back-end API ([`/backend`](file:///c:/Users/Samuel/Downloads/library_manager/backend))**: Desenvolvido em Python (Flask) integrado a um banco de dados SQLite. Gerencia a sessão de empréstimo (janela de 30 segundos), a regra de negócio para notificações de atraso, o histórico de ações e a comunicação com a porta serial (via PySerial).
+3.  **Front-end Web ([`/web`](file:///c:/Users/Samuel/Downloads/library_manager/web))**: Painel visual construído com tecnologias web modernas (HTML5, CSS3, JavaScript Vanilla) que atualiza as informações automaticamente em tempo real através de técnicas de Long Polling.
 
-```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-```
+---
 
-Edite o arquivo `.env` para garantir:
+## 🚀 Guia de Instalação e Execução
 
-```env
-SERIAL_PORT=MOCK
-LOAN_TIMEOUT_SECONDS=15
-ACTIVE_STUDENT_WINDOW_SECONDS=30
-```
+Para facilitar a configuração do ambiente, cada componente do ecossistema possui seu próprio guia de instalação detalhado e passo a passo. Acesse o guia do módulo desejado nos links abaixo:
 
-### 2. Iniciar o backend
+*   📖 **Configurar o Hardware e Firmware**: Veja o [README do Arduino (arduino/README.md)](file:///c:/Users/Samuel/Downloads/library_manager/arduino/README.md).
+*   ⚙️ **Instalar e Subir a API Flask**: Veja o [README do Backend (backend/README.md)](file:///c:/Users/Samuel/Downloads/library_manager/backend/README.md).
+*   💻 **Visualizar o Dashboard Web**: Veja o [README do Frontend (web/README.md)](file:///c:/Users/Samuel/Downloads/library_manager/web/README.md).
 
-Windows:
+---
 
-```powershell
-python app.py
-```
+## 📝 Tags de Teste Cadastradas (Padrão)
 
-macOS / Ubuntu / Raspberry Pi:
+Caso esteja testando o sistema física ou virtualmente (modo MOCK), as seguintes tags já estão pré-configuradas no banco de dados para simulação rápida:
 
-```bash
-python app.py
-```
+### 👤 Alunos Cadastrados
+*   `43 E1 5C FE` — Ana Silva
+*   `83 6C C1 02` — Bruno Santos
+*   `33 14 11 FF` — Carlos Oliveira
 
-O backend sobe em `http://localhost:5000`.
-
-### 3. Abrir o dashboard
-
-Na raiz do projeto:
-
-Windows:
-
-```powershell
-python -m http.server 8000
-```
-
-macOS / Ubuntu / Raspberry Pi:
-
-```bash
-python3 -m http.server 8000
-```
-
-Abra:
-
-`http://localhost:8000/web/`
-
-## Como testar em MOCK
-
-No dashboard, o painel de modo MOCK permite:
-
-- ler uma tag como `ALUNO`
-- ler uma tag como `LIVRO`
-- testar leitura generica `RFID`, deixando o back-end decidir se e aluno ou livro
-
-Fluxo recomendado:
-
-1. Clique em `Resetar DB`
-2. Leia um aluno
-3. Leia um livro
-4. Aguarde 15 segundos para ver o atraso
-5. Leia o mesmo aluno novamente
-6. Leia o mesmo livro para devolver
-7. Registre uma avaliacao
-
-## Rodando com Raspberry Pi e Arduino
-
-Quando o hardware estiver em maos, basta trocar a porta serial no `.env`.
-
-Exemplos:
-
-- Windows: `SERIAL_PORT=COM3`
-- macOS: `SERIAL_PORT=/dev/cu.usbmodemXXXX`
-- Ubuntu / Raspberry Pi: `SERIAL_PORT=/dev/ttyACM0`
-
-Depois:
-
-1. Conecte o Arduino por USB na Raspberry Pi
-2. Descubra a porta:
-   - `ls /dev/ttyACM*`
-   - `ls /dev/ttyUSB*`
-3. Atualize `SERIAL_PORT`
-4. Rode o backend Flask
-5. Abra o dashboard pela rede local ou direto na Raspberry
-
-Ha um guia resumido adicional em [README_RASPBERRY_PI.md](C:\Users\bernardo\Documents\github\library_manager\README_RASPBERRY_PI.md).
-
-## Ligacao do hardware
-
-Pinos usados no Arduino:
-
-- RFID SDA -> pino `10`
-- RFID SCK -> pino `13`
-- RFID MOSI -> pino `11`
-- RFID MISO -> pino `12`
-- RFID RST -> pino `5`
-- LED verde -> pino `2`
-- LED vermelho -> pino `3`
-- buzzer -> pino `4`
-
-Importante:
-
-- o modulo RC522 deve ser alimentado em `3.3V`
-- use resistor para os LEDs
-
-## Arquivos importantes
-
-- [backend/app.py](C:\Users\bernardo\Documents\github\library_manager\backend\app.py)
-- [backend/database.py](C:\Users\bernardo\Documents\github\library_manager\backend\database.py)
-- [backend/serial_monitor.py](C:\Users\bernardo\Documents\github\library_manager\backend\serial_monitor.py)
-- [web/index.html](C:\Users\bernardo\Documents\github\library_manager\web\index.html)
-- [web/app.js](C:\Users\bernardo\Documents\github\library_manager\web\app.js)
-- [web/style.css](C:\Users\bernardo\Documents\github\library_manager\web\style.css)
-- [readme_tarefas.md](C:\Users\bernardo\Documents\github\library_manager\readme_tarefas.md)
-
-## Proximos passos
-
-As proximas melhorias planejadas foram consolidadas em [readme_tarefas.md](C:\Users\bernardo\Documents\github\library_manager\readme_tarefas.md) para que qualquer integrante da equipe ou outra IA consiga continuar a evolucao do projeto.
+### 📚 Livros no Acervo
+*   `63 6F 2C FE` — Introdução a Bancos de Dados
+*   `43 82 51 FE` — Docker Prático
+*   `73 BD BF 02` — Flask Web Development
+*   `63 34 63 FB` — Arquitetura Limpa
