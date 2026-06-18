@@ -813,6 +813,59 @@ select.form-control {
     margin-top: 8px;
 }
 
+.hidden {
+    display: none !important;
+}
+
+.panel-subtitle {
+    margin-top: 6px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.mock-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 18px;
+}
+
+.mock-group-title {
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.mock-button-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.mock-action-button {
+    min-height: 36px;
+}
+
+.mock-result {
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    font-size: 0.9rem;
+    color: var(--text-main);
+}
+
+.mock-result.success {
+    border-color: rgba(16, 185, 129, 0.35);
+    color: var(--success);
+}
+
+.mock-result.error {
+    border-color: rgba(239, 68, 68, 0.35);
+    color: var(--danger);
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;

@@ -72,9 +72,9 @@ void loop() {
   
   // Envia a tag correspondente com base no tipo
   // Estudantes cadastrados:
-  // Ana Silva: 43 E1 5C FE
-  // Bruno Santos: 83 6C C1 02
-  // Carlos Oliveira: 33 14 11 FF
+  // Bernardo Heckler: 43 E1 5C FE
+  // Gabriel Rico: 83 6C C1 02
+  // Bento Martins: 33 14 11 FF
   if (uidString == "43 E1 5C FE" || uidString == "83 6C C1 02" || uidString == "33 14 11 FF") {
     Serial.print("ALUNO:");
   } else {

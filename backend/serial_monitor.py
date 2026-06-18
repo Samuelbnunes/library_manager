@@ -1,53 +1,66 @@
+import os
 import threading
 import time
-import serial
-import os
+
 import database
+import serial
+
 
 class SerialMonitor(threading.Thread):
-    def __init__(self, port="COM3", baudrate=9600):
+    def __init__(self, port="MOCK", baudrate=9600):
         super().__init__()
-        # Use SERIAL_PORT from environment if available, otherwise fallback to COM3
         self.port = os.environ.get("SERIAL_PORT", port)
         self.baudrate = baudrate
         self.daemon = True
         self.running = True
         self.ser = None
         self.lock = threading.Lock()
-        
-        # Active student memory
+
         self.active_student_id = None
         self.active_student_time = 0.0
-        
-        # Connection status
+        self.active_student_window_seconds = int(
+            os.environ.get("ACTIVE_STUDENT_WINDOW_SECONDS", "30")
+        )
+
         self.connected = False
+        self.mock_mode = self.port.strip().upper() == "MOCK"
+        self.last_response = None
 
     def run(self):
+        if self.mock_mode:
+            self.connected = True
+            print("[SerialMonitor] Rodando em modo MOCK. Nenhuma porta serial sera aberta.")
+            while self.running:
+                time.sleep(0.2)
+            return
+
         print(f"[SerialMonitor] Iniciando monitoramento serial na porta {self.port}...")
         while self.running:
             if not self.connected:
                 try:
                     self.ser = serial.Serial(self.port, self.baudrate, timeout=1.0)
                     self.connected = True
-                    print(f"[SerialMonitor] Conectado com sucesso à porta {self.port}.")
-                except Exception as e:
-                    print(f"[SerialMonitor] Não foi possível abrir a porta {self.port} ({e}). Tentando novamente em 5 segundos...")
+                    print(f"[SerialMonitor] Conectado com sucesso a porta {self.port}.")
+                except Exception as exc:
+                    print(
+                        f"[SerialMonitor] Nao foi possivel abrir a porta {self.port} ({exc}). "
+                        "Tentando novamente em 5 segundos..."
+                    )
                     self.connected = False
                     time.sleep(5)
                     continue
-            
+
             try:
-                # Ler linha da porta serial
                 if self.ser.in_waiting > 0:
-                    line = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                    line = self.ser.readline().decode("utf-8", errors="ignore").strip()
                     if line:
                         print(f"[SerialMonitor] Recebido: '{line}'")
                         self.process_line(line)
-            except Exception as e:
-                print(f"[SerialMonitor] Conexão serial perdida ou erro na leitura: {e}")
+            except Exception as exc:
+                print(f"[SerialMonitor] Conexao serial perdida ou erro na leitura: {exc}")
                 self.close_serial()
                 time.sleep(2)
-            
+
             time.sleep(0.1)
 
     def close_serial(self):
@@ -57,7 +70,7 @@ class SerialMonitor(threading.Thread):
                     self.ser.close()
                 except Exception:
                     pass
-            self.connected = False
+            self.connected = False if not self.mock_mode else True
             self.ser = None
 
     def stop(self):
@@ -65,114 +78,191 @@ class SerialMonitor(threading.Thread):
         self.close_serial()
 
     def write_char(self, char):
-        """Método thread-safe para enviar um caractere via serial."""
+        self.last_response = char
+
+        if self.mock_mode:
+            print(f"[SerialMonitor][MOCK] Resposta simulada enviada: '{char}'")
+            return True
+
         with self.lock:
             if self.ser and self.ser.is_open:
                 try:
-                    self.ser.write(char.encode('utf-8'))
+                    self.ser.write(char.encode("utf-8"))
                     print(f"[SerialMonitor] Resposta serial enviada: '{char}'")
                     return True
-                except Exception as e:
-                    print(f"[SerialMonitor] Falha ao escrever na serial: {e}")
+                except Exception as exc:
+                    print(f"[SerialMonitor] Falha ao escrever na serial: {exc}")
             return False
 
     def process_line(self, line):
-        # Ignora mensagens de inicialização do Arduino
         if "---" in line or "Aproxime" in line or "Status:" in line or "UID" in line:
-            return
+            return {"ignored": True}
 
         if ":" not in line:
-            return
+            return {"ignored": True}
 
-        parts = line.split(":", 1)
-        type_prefix = parts[0].strip().upper()
-        rfid_id = parts[1].strip().upper()
+        type_prefix, rfid_id = line.split(":", 1)
+        type_prefix = type_prefix.strip().upper()
+        rfid_id = rfid_id.strip().upper()
 
         if type_prefix == "ALUNO":
-            self.handle_aluno(rfid_id)
-        elif type_prefix == "LIVRO":
-            self.handle_livro(rfid_id)
+            return self.handle_aluno(rfid_id)
+        if type_prefix == "LIVRO":
+            return self.handle_livro(rfid_id)
+        return {"success": False, "response": "R", "message": "Tipo RFID invalido."}
+
+    def simulate_scan(self, type_prefix, rfid_id):
+        simulated_line = f"{type_prefix.strip().upper()}:{rfid_id.strip().upper()}"
+        print(f"[SerialMonitor][MOCK] Simulando leitura: {simulated_line}")
+        return self.process_line(simulated_line)
 
     def handle_aluno(self, rfid_id):
         print(f"[SerialMonitor] Processando Aluno com RFID: '{rfid_id}'")
         aluno = database.get_aluno(rfid_id)
-        
+
         if aluno:
-            # Salva o aluno ativo e atualiza o timestamp
             self.active_student_id = rfid_id
             self.active_student_time = time.time()
-            print(f"[SerialMonitor] Aluno Ativo: '{aluno['nome']}' ({rfid_id}). Válido por 30s.")
-            self.write_char('V')
-        else:
-            # Aluno inexistente
-            self.active_student_id = None
-            self.active_student_time = 0.0
-            print(f"[SerialMonitor] Aluno com RFID '{rfid_id}' não localizado no banco.")
-            self.write_char('R')
+            self.write_char("V")
+            return {
+                "success": True,
+                "response": "V",
+                "type": "ALUNO",
+                "rfid_id": rfid_id,
+                "message": f"Aluno {aluno['nome']} ativado por {self.active_student_window_seconds}s.",
+                "entity": {"nome": aluno["nome"], "matricula": aluno["matricula"]},
+            }
+
+        self.active_student_id = None
+        self.active_student_time = 0.0
+        self.write_char("R")
+        return {
+            "success": False,
+            "response": "R",
+            "type": "ALUNO",
+            "rfid_id": rfid_id,
+            "message": f"Aluno com RFID {rfid_id} nao localizado no banco.",
+        }
 
     def handle_livro(self, rfid_id):
         print(f"[SerialMonitor] Processando Livro com RFID: '{rfid_id}'")
         livro = database.get_livro(rfid_id)
-        
-        if not livro:
-            print(f"[SerialMonitor] Livro com RFID '{rfid_id}' não cadastrado.")
-            self.write_char('R')
-            return
 
-        # Verifica se há aluno ativo na sessão dentro do limite de 30 segundos
+        if not livro:
+            self.write_char("R")
+            return {
+                "success": False,
+                "response": "R",
+                "type": "LIVRO",
+                "rfid_id": rfid_id,
+                "message": f"Livro com RFID {rfid_id} nao cadastrado.",
+            }
+
         now = time.time()
-        if not self.active_student_id or (now - self.active_student_time) > 30:
-            print("[SerialMonitor] Erro: Nenhum aluno ativo na sessão ou sessão expirou (> 30s).")
+        if not self.active_student_id or (now - self.active_student_time) > self.active_student_window_seconds:
             self.active_student_id = None
             self.active_student_time = 0.0
-            self.write_char('R')
-            return
+            self.write_char("R")
+            return {
+                "success": False,
+                "response": "R",
+                "type": "LIVRO",
+                "rfid_id": rfid_id,
+                "message": "Nenhum aluno ativo na sessao ou a sessao expirou.",
+            }
 
-        # O aluno ativo é válido
         aluno_id = self.active_student_id
         aluno = database.get_aluno(aluno_id)
-        aluno_nome = aluno['nome'] if aluno else "Desconhecido"
-        
-        book_status = livro['status']
-        print(f"[SerialMonitor] Livro '{livro['titulo']}' com status '{book_status}'. Aluno Ativo: '{aluno_nome}'")
+        aluno_nome = aluno["nome"] if aluno else "Desconhecido"
+        book_status = livro["status"]
 
-        if book_status == 'disponivel':
-            # Realiza empréstimo
+        if book_status == "disponivel":
             try:
                 database.create_loan(aluno_id, rfid_id)
-                print(f"[SerialMonitor] EMPRÉSTIMO realizado com sucesso. Livro: '{livro['titulo']}' para Aluno: '{aluno_nome}'")
-                self.write_char('V')
-            except Exception as e:
-                print(f"[SerialMonitor] Erro ao realizar empréstimo: {e}")
-                self.write_char('R')
-                
-        elif book_status in ('emprestado', 'atrasado'):
-            # Realiza devolução
-            # Verifica o empréstimo ativo para este livro
+                self.write_char("V")
+                return {
+                    "success": True,
+                    "response": "V",
+                    "type": "LIVRO",
+                    "rfid_id": rfid_id,
+                    "message": f"Emprestimo realizado: {aluno_nome} -> {livro['titulo']}.",
+                }
+            except Exception as exc:
+                self.write_char("R")
+                return {
+                    "success": False,
+                    "response": "R",
+                    "type": "LIVRO",
+                    "rfid_id": rfid_id,
+                    "message": f"Erro ao realizar emprestimo: {exc}",
+                }
+
+        if book_status in ("emprestado", "atrasado"):
             loan = database.get_active_loan_for_book(rfid_id)
             if loan:
-                # Só pode devolver se o aluno ativo for quem pegou emprestado
-                if loan['aluno_id'] == aluno_id:
+                if loan["aluno_id"] == aluno_id:
                     try:
-                        database.return_loan(loan['id'], rfid_id)
-                        print(f"[SerialMonitor] DEVOLUÇÃO realizada com sucesso. Livro: '{livro['titulo']}' devolvido por: '{aluno_nome}'")
-                        self.write_char('V')
-                    except Exception as e:
-                        print(f"[SerialMonitor] Erro ao realizar devolução: {e}")
-                        self.write_char('R')
-                else:
-                    # Livro emprestado para outro aluno
-                    borrower = database.get_aluno(loan['aluno_id'])
-                    borrower_nome = borrower['nome'] if borrower else "Desconhecido"
-                    print(f"[SerialMonitor] Erro: Livro '{livro['titulo']}' já está emprestado para outro aluno ('{borrower_nome}').")
-                    self.write_char('R')
-            else:
-                # Caso o livro esteja marcado como emprestado/atrasado mas sem registro ativo (consistência do banco)
-                try:
-                    # Reset status de qualquer forma para 'disponivel'
-                    database.return_loan(-1, rfid_id)
-                    print(f"[SerialMonitor] Livro '{livro['titulo']}' estava '{book_status}' mas sem registro ativo. Resetado para disponível.")
-                    self.write_char('V')
-                except Exception as e:
-                    print(f"[SerialMonitor] Erro ao limpar estado: {e}")
-                    self.write_char('R')
+                        database.return_loan(loan["id"], rfid_id)
+                        self.write_char("V")
+                        return {
+                            "success": True,
+                            "response": "V",
+                            "type": "LIVRO",
+                            "rfid_id": rfid_id,
+                            "message": f"Devolucao realizada: {aluno_nome} devolveu {livro['titulo']}.",
+                        }
+                    except Exception as exc:
+                        self.write_char("R")
+                        return {
+                            "success": False,
+                            "response": "R",
+                            "type": "LIVRO",
+                            "rfid_id": rfid_id,
+                            "message": f"Erro ao realizar devolucao: {exc}",
+                        }
+
+                borrower = database.get_aluno(loan["aluno_id"])
+                borrower_nome = borrower["nome"] if borrower else "Desconhecido"
+                self.write_char("R")
+                return {
+                    "success": False,
+                    "response": "R",
+                    "type": "LIVRO",
+                    "rfid_id": rfid_id,
+                    "message": (
+                        f"Livro {livro['titulo']} ja esta emprestado para outro aluno "
+                        f"({borrower_nome})."
+                    ),
+                }
+
+            try:
+                database.return_loan(-1, rfid_id)
+                self.write_char("V")
+                return {
+                    "success": True,
+                    "response": "V",
+                    "type": "LIVRO",
+                    "rfid_id": rfid_id,
+                    "message": (
+                        f"Livro {livro['titulo']} estava marcado como {book_status} sem emprestimo "
+                        "ativo e foi resetado para disponivel."
+                    ),
+                }
+            except Exception as exc:
+                self.write_char("R")
+                return {
+                    "success": False,
+                    "response": "R",
+                    "type": "LIVRO",
+                    "rfid_id": rfid_id,
+                    "message": f"Erro ao limpar estado do livro: {exc}",
+                }
+
+        self.write_char("R")
+        return {
+            "success": False,
+            "response": "R",
+            "type": "LIVRO",
+            "rfid_id": rfid_id,
+            "message": f"Status do livro {livro['titulo']} nao suportado: {book_status}.",
+        }

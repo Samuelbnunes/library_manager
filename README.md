@@ -7,6 +7,55 @@ O projeto consiste em três partes principais:
 2.  **Back-end Flask (`/backend`)**: API REST em Python que se comunica via Porta Serial (USB) com o Arduino, armazena dados em um banco de dados SQLite e gerencia regras de negócio e de tempo (regra dos 15 segundos para atrasos).
 3.  **Front-end Web (`/web`)**: Painel (Dashboard) responsivo feito em HTML5, CSS3 e JavaScript Vanilla com atualizações automáticas (Long Polling).
 
+## Rodando localmente sem hardware
+
+Agora o projeto possui um modo de desenvolvimento com `SERIAL_PORT=MOCK`. Nesse modo:
+
+- o back-end inicia com alunos e livros de demonstracao;
+- a conexao serial fica simulada;
+- o dashboard mostra um painel para simular leituras de `ALUNO` e `LIVRO`;
+- o mesmo fluxo de emprestimo, devolucao e atraso continua valendo.
+
+### Setup rapido
+
+1. Entre em `backend/`.
+2. Crie um arquivo `.env` a partir de `backend/.env.example`.
+3. Garanta que `SERIAL_PORT=MOCK`.
+4. Instale as dependencias e inicie a API:
+   - Windows:
+     ```powershell
+     cd backend
+     python -m venv venv
+     .\venv\Scripts\activate
+     pip install -r requirements.txt
+     python app.py
+     ```
+   - macOS/Linux/Ubuntu:
+     ```bash
+     python3 -m venv venv
+     source venv/bin/activate
+     pip install -r requirements.txt
+     python app.py
+     ```
+5. Em outro terminal, sirva a pasta do projeto:
+   - Windows:
+     ```powershell
+     python -m http.server 8000
+     ```
+   - macOS/Linux/Ubuntu:
+     ```bash
+     python3 -m http.server 8000
+     ```
+6. Abra `http://localhost:8000/web/`.
+
+### Quando tiver Arduino + Raspberry Pi em maos
+
+Troque apenas a variavel `SERIAL_PORT`:
+
+- Windows: `SERIAL_PORT=COM3`
+- macOS: `SERIAL_PORT=/dev/cu.usbmodemXXXX` ou `SERIAL_PORT=/dev/cu.usbserialXXXX`
+- Ubuntu/Raspberry Pi: `SERIAL_PORT=/dev/ttyACM0` ou `SERIAL_PORT=/dev/ttyUSB0`
+
 ---
 
 ## 🔌 Esquema de Ligação do Hardware
@@ -137,9 +186,9 @@ Com tudo rodando, você pode testar a lógica do sistema com as tags configurada
 
 ### Tags Cadastradas padrão (Mapeadas no Arduino e Banco de Dados):
 *   **Alunos**:
-    *   Ana Silva: `43 E1 5C FE`
-    *   Bruno Santos: `83 6C C1 02`
-    *   Carlos Oliveira: `33 14 11 FF`
+    *   Bernardo Heckler: `43 E1 5C FE`
+    *   Gabriel Rico: `83 6C C1 02`
+    *   Bento Martins: `33 14 11 FF`
 *   **Livros**:
     *   Introdução a Bancos de Dados: `63 6F 2C FE`
     *   Docker Prático: `43 82 51 FE`
@@ -148,16 +197,16 @@ Com tudo rodando, você pode testar a lógica do sistema com as tags configurada
 
 ### Teste Passo a Passo:
 1.  **Resetar Banco**: No Dashboard, clique no botão **"Resetar DB"** no canto superior direito para carregar os dados de teste.
-2.  **Identificar o Aluno**: Aproxime o cartão da **Ana Silva** (`43 E1 5C FE`) do leitor.
+2.  **Identificar o Aluno**: Aproxime o cartão do **Bernardo Heckler** (`43 E1 5C FE`) do leitor.
     *   *Arduino*: Acenderá o LED Verde e dará 1 bipe.
-    *   *Dashboard*: O status do Arduino mudará e o sistema guardará a sessão da Ana por 30 segundos.
+    *   *Dashboard*: O status do Arduino mudará e o sistema guardará a sessão do Bernardo por 30 segundos.
 3.  **Realizar Empréstimo**: Dentro dos 30 segundos, aproxime o livro **Docker Prático** (`43 82 51 FE`) do leitor.
     *   *Arduino*: Acenderá o LED Verde e dará 1 bipe.
-    *   *Dashboard*: O livro mudará para o status "Emprestado" em azul, e o histórico mostrará "Ana Silva emprestou 'Docker Prático'".
+    *   *Dashboard*: O livro mudará para o status "Emprestado" em azul, e o histórico mostrará "Bernardo Heckler emprestou 'Docker Prático'".
 4.  **Testar Alerta de Atraso (Regra dos 15 segundos)**: Não faça nada por 15 segundos.
     *   *Dashboard*: Após 15 segundos, o status do livro e do empréstimo mudará automaticamente para "Em Atraso" (vermelho piscando) e o painel de métricas ativará o alerta vermelho.
     *   *Arduino*: Receberá um comando de erro do servidor e ativará o LED Vermelho e emitirá dois bipes graves.
-5.  **Realizar Devolução**: Aproxime o cartão da **Ana Silva** novamente para reativar a sessão e, em seguida, aproxime o livro **Docker Prático**.
+5.  **Realizar Devolução**: Aproxime o cartão da **Bernardo Heckler** novamente para reativar a sessão e, em seguida, aproxime o livro **Docker Prático**.
     *   *Arduino*: LED Verde e 1 bipe.
-    *   *Dashboard*: O livro voltará para o status "Disponível". Um banner verde aparecerá no topo do Dashboard dizendo *"Ana Silva devolveu 'Docker Prático'. Que tal avaliá-lo?"*
+    *   *Dashboard*: O livro voltará para o status "Disponível". Um banner verde aparecerá no topo do Dashboard dizendo *"Bernardo Heckler devolveu 'Docker Prático'. Que tal avaliá-lo?"*
 6.  **Dar Feedback**: Clique no botão **"Avaliar Livro"** na notificação ou na tabela do acervo, escolha a quantidade de estrelas, digite um comentário e clique em salvar. O comentário aparecerá imediatamente na listagem de feedbacks e influenciará o ranking lateral.
