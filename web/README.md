@@ -14,10 +14,9 @@ Para que as requisições AJAX de comunicação com o backend funcionem perfeita
 
 Com o Python instalado no seu sistema, execute os comandos a seguir a partir do terminal.
 
-1. **Abra o terminal na raiz do projeto (uma pasta acima da pasta `/web`):**
+1. **Abra o terminal na pasta `/web`:**
    ```bash
-   # Certifique-se de estar na raiz do repositório
-   cd library_manager
+   cd web
    ```
 
 2. **Inicie o servidor HTTP embutido do Python:**
@@ -33,7 +32,7 @@ Com o Python instalado no seu sistema, execute os comandos a seguir a partir do 
 3. **Acesse no seu navegador:**
    Abra o endereço abaixo para visualizar o painel:
    ```text
-   http://127.0.0.1:8000/web/
+   http://localhost:8000
    ```
 
 ---
