@@ -12,10 +12,10 @@ DEFAULT_ALUNOS = [
 ]
 
 DEFAULT_LIVROS = [
-    ("63 6F 2C FE", "Introducao a Bancos de Dados", "C. J. Date", "disponivel"),
-    ("43 82 51 FE", "Docker Pratico", "Jeferson Fernando", "disponivel"),
-    ("73 BD BF 02", "Flask Web Development", "Miguel Grinberg", "disponivel"),
-    ("63 34 63 FB", "Arquitetura Limpa", "Robert C. Martin", "disponivel"),
+    ("63 6F 2C FE", "A Metamorfose", "Franz Kafka", "disponivel"),
+    ("43 82 51 FE", "Diário de um Banana: Rodrick é o Cara", "Jeff Kinney", "disponivel"),
+    ("73 BD BF 02", "A Odisseia", "Homero", "disponivel"),
+    ("63 34 63 FB", "Hamlet", "William Shakespeare", "disponivel"),
 ]
 
 
@@ -74,12 +74,20 @@ def init_db():
         CREATE TABLE IF NOT EXISTS avaliacoes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             livro_id TEXT NOT NULL,
+            aluno_id TEXT,
             nota INTEGER NOT NULL CHECK(nota >= 1 AND nota <= 5),
             comentario TEXT,
-            FOREIGN KEY (livro_id) REFERENCES livros(id_rfid)
+            FOREIGN KEY (livro_id) REFERENCES livros(id_rfid),
+            FOREIGN KEY (aluno_id) REFERENCES alunos(id_rfid)
         )
         """
     )
+
+    review_columns = {
+        row["name"] for row in cursor.execute("PRAGMA table_info(avaliacoes)").fetchall()
+    }
+    if "aluno_id" not in review_columns:
+        cursor.execute("ALTER TABLE avaliacoes ADD COLUMN aluno_id TEXT")
 
     cursor.execute(
         """
@@ -317,7 +325,7 @@ def mark_loan_overdue(loan_id, book_id):
     conn.close()
 
 
-def add_review(livro_id, nota, comentario):
+def add_review(livro_id, nota, comentario, aluno_id=None):
     conn = get_db_connection()
     cursor = conn.cursor()
     livro = cursor.execute("SELECT 1 FROM livros WHERE id_rfid = ?", (livro_id,)).fetchone()
@@ -326,8 +334,32 @@ def add_review(livro_id, nota, comentario):
         raise ValueError("Livro nao cadastrado.")
 
     cursor.execute(
-        "INSERT INTO avaliacoes (livro_id, nota, comentario) VALUES (?, ?, ?)",
-        (livro_id, int(nota), comentario),
+        "INSERT INTO avaliacoes (livro_id, aluno_id, nota, comentario) VALUES (?, ?, ?, ?)",
+        (livro_id, aluno_id, int(nota), comentario),
+    )
+    conn.commit()
+    conn.close()
+
+
+def update_review(review_id, nota, comentario, aluno_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    review = cursor.execute(
+        "SELECT aluno_id FROM avaliacoes WHERE id = ?",
+        (review_id,),
+    ).fetchone()
+
+    if not review:
+        conn.close()
+        raise ValueError("Avaliacao nao encontrada.")
+
+    if not aluno_id or review["aluno_id"] != aluno_id:
+        conn.close()
+        raise PermissionError("Voce nao pode editar esta avaliacao.")
+
+    cursor.execute(
+        "UPDATE avaliacoes SET nota = ?, comentario = ? WHERE id = ?",
+        (int(nota), comentario, review_id),
     )
     conn.commit()
     conn.close()
@@ -470,12 +502,16 @@ def get_dashboard_data(seconds_limit):
         """
         SELECT
             av.id,
+            av.livro_id,
+            av.aluno_id,
             av.nota,
             av.comentario,
             l.titulo as livro_titulo,
-            l.autor as livro_autor
+            l.autor as livro_autor,
+            a.nome as aluno_nome
         FROM avaliacoes av
         JOIN livros l ON av.livro_id = l.id_rfid
+        LEFT JOIN alunos a ON av.aluno_id = a.id_rfid
         ORDER BY av.id DESC
         LIMIT 10
         """
