@@ -116,16 +116,25 @@
                 </div>
             </section>
 
+            <nav class="page-selector" aria-label="Selecao de paginas do dashboard">
+                <button type="button" class="page-badge active" data-page-target="acervo">
+                    Acervo
+                </button>
+                <button type="button" class="page-badge" data-page-target="atrasos">
+                    Atrasos
+                </button>
+                <button type="button" class="page-badge" data-page-target="historico">
+                    Historico
+                </button>
+                <button type="button" class="page-badge" data-page-target="feedbacks">
+                    Feedbacks
+                </button>
+            </nav>
+
             <div class="main-layout-grid">
                 <div class="layout-main-column">
-                    <section class="content-card">
-                        <div class="card-header">
-                            <div>
-                                <h2>Consulta do acervo</h2>
-                                <p class="panel-subtitle">
-                                    Visao consolidada do acervo, com status, aluno responsavel e RFID.
-                                </p>
-                            </div>
+                    <section class="content-card page-panel active" data-page-section="acervo">
+                        <div class="card-header card-header-actions">
                             <div class="filter-controls">
                                 <input type="text" id="search-input" placeholder="Buscar titulo ou autor..." class="form-control">
                                 <select id="status-filter" class="form-control">
@@ -157,28 +166,19 @@
                         </div>
                     </section>
 
-                    <section class="content-card">
-                        <div class="card-header">
-                            <h2>Atrasos em destaque</h2>
-                        </div>
+                    <section class="content-card page-panel" data-page-section="atrasos">
                         <div id="overdue-list" class="stack-list">
                             <p class="timeline-placeholder">Nenhum atraso registrado.</p>
                         </div>
                     </section>
 
-                    <section class="content-card">
-                        <div class="card-header">
-                            <h2>Historico recente</h2>
-                        </div>
+                    <section class="content-card page-panel" data-page-section="historico">
                         <div class="timeline-container" id="timeline-history">
                             <p class="timeline-placeholder">Carregando historico...</p>
                         </div>
                     </section>
 
-                    <section class="content-card">
-                        <div class="card-header">
-                            <h2>Feedbacks dos alunos</h2>
-                        </div>
+                    <section class="content-card page-panel" data-page-section="feedbacks">
                         <div class="reviews-grid" id="reviews-container">
                             <p class="reviews-placeholder">Carregando feedbacks...</p>
                         </div>
@@ -227,9 +227,14 @@
                 <form id="review-form">
                     <input type="hidden" id="form-book-id">
 
-                    <div class="form-group">
-                        <label for="form-book-title">Livro</label>
-                        <input type="text" id="form-book-title" readonly class="form-control-readonly">
+                    <div class="review-book-preview">
+                        <img id="review-book-cover" src="" alt="" class="review-book-cover">
+                        <div class="review-book-preview-info">
+                            <span class="review-book-kicker">Livro selecionado</span>
+                            <strong id="review-book-preview-title">-</strong>
+                            <span id="review-book-preview-author">-</span>
+                            <span id="review-author-name" class="review-author-name hidden">Avaliado por -</span>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -241,21 +246,27 @@
                             <span class="star" data-rating="4">★</span>
                             <span class="star" data-rating="5">★</span>
                         </div>
-                        <input type="hidden" id="form-rating-value" value="5">
+                        <input type="hidden" id="form-rating-value" value="0">
+                        <span id="rating-error" class="field-help-error hidden">Selecione uma nota para avaliar.</span>
                     </div>
 
                     <div class="form-group">
-                        <label for="form-comment">Comentario</label>
-                        <textarea id="form-comment" rows="4" placeholder="O que voce achou deste livro?" class="form-control" required></textarea>
+                        <label for="form-comment" id="comment-label">Sua avaliação sobre a leitura</label>
+                        <textarea id="form-comment" rows="4" maxlength="50" placeholder="O que você achou deste livro?" class="form-control" required data-required-message="Informe um comentário para avaliar."></textarea>
+                        <span id="comment-counter" class="character-counter">0/50</span>
                     </div>
 
                     <div class="form-actions">
                         <button type="button" id="btn-modal-cancel" class="btn btn-secondary">Cancelar</button>
-                        <button type="submit" class="btn btn-success">Salvar avaliacao</button>
+                        <button type="submit" class="btn btn-success">Salvar avaliação</button>
                     </div>
                 </form>
             </div>
         </div>
+    </div>
+
+    <div id="success-toast" class="success-toast hidden" role="status" aria-live="polite">
+        Avaliacao realizada com sucesso!
     </div>
 
     <script src="app.js"></script>
