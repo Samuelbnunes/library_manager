@@ -145,6 +145,10 @@ def add_review():
             return jsonify({"error": "A nota deve ser um numero inteiro entre 1 e 5."}), 400
 
         aluno_id = serial_monitor.active_student_id if serial_monitor is not None else None
+        aluno_id = aluno_id or data.get("aluno_id")
+        if not aluno_id:
+            last_returned_loan = database.get_last_returned_loan_for_book(livro_id)
+            aluno_id = last_returned_loan["aluno_id"] if last_returned_loan else None
 
         database.add_review(livro_id, nota_int, comentario, aluno_id=aluno_id)
         database.log_event(
