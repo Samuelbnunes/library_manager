@@ -19,8 +19,9 @@ class SerialMonitor(threading.Thread):
 
         self.active_student_id = None
         self.active_student_time = 0.0
+        self.pending_serial_line = None
         self.active_student_window_seconds = int(
-            os.environ.get("ACTIVE_STUDENT_WINDOW_SECONDS", "30")
+            os.environ.get("ACTIVE_STUDENT_WINDOW_SECONDS", "60")
         )
 
         self.connected = False
@@ -98,7 +99,8 @@ class SerialMonitor(threading.Thread):
 
             try:
                 if self.ser.in_waiting > 0:
-                    line = self.ser.readline().decode("utf-8", errors="ignore").strip()
+                    raw_line = self.ser.readline().decode("utf-8", errors="ignore").strip()
+                    line = self.normalize_serial_line(raw_line)
                     if line:
                         print(f"[SerialMonitor] Recebido: '{line}'")
                         self.process_line(line, source="arduino")
@@ -129,6 +131,49 @@ class SerialMonitor(threading.Thread):
     def stop(self):
         self.running = False
         self.close_serial()
+
+    def normalize_serial_line(self, line):
+        if not line:
+            return None
+
+        if self.pending_serial_line:
+            line = f"{self.pending_serial_line} {line}".strip()
+            self.pending_serial_line = None
+
+        if self.is_incomplete_rfid_line(line):
+            self.pending_serial_line = line
+            print(f"[SerialMonitor] Linha RFID incompleta recebida, aguardando complemento: '{line}'")
+            return None
+
+        if self.is_orphan_rfid_fragment(line):
+            print(f"[SerialMonitor] Fragmento RFID incompleto ignorado: '{line}'")
+            return None
+
+        return line
+
+    def is_incomplete_rfid_line(self, line):
+        if ":" not in line:
+            return False
+
+        type_prefix, rfid_id = line.split(":", 1)
+        if type_prefix.strip().upper() not in {"ALUNO", "LIVRO", "RFID", "TAG", "CARD"}:
+            return False
+
+        return 0 < len(rfid_id.strip().split()) < 4
+
+    def is_orphan_rfid_fragment(self, line):
+        if ":" in line:
+            return False
+
+        tokens = line.strip().split()
+        if not tokens or len(tokens) >= 4:
+            return False
+
+        return all(
+            1 <= len(token) <= 2
+            and all(char in "0123456789ABCDEFabcdef" for char in token)
+            for token in tokens
+        )
 
     def get_active_student_summary(self):
         if not self.active_student_id:

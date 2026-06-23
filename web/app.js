@@ -1,4 +1,4 @@
-const API_BASE = window.location.port === "5000" ? "" : "http://localhost:5000";
+const API_BASE = window.location.port === "5000" ? "" : `${window.location.protocol}//${window.location.hostname}:5000`;
 
 let currentBooks = [];
 let currentReviews = [];
@@ -9,6 +9,7 @@ let isReviewReadonly = false;
 let activeReviewMode = "create";
 let activeReviewId = null;
 let originalReviewSnapshot = null;
+let activeReviewerId = null;
 let activeReviewerName = null;
 
 const elServerStatus = document.getElementById("status-server");
@@ -89,7 +90,7 @@ const bookCovers = {
 
 document.addEventListener("DOMContentLoaded", () => {
     fetchDashboardData();
-    setInterval(fetchDashboardData, 2000);
+    setInterval(fetchDashboardData, 1000);
 
     searchInput.addEventListener("input", renderBooksTable);
     statusFilter.addEventListener("change", renderBooksTable);
@@ -138,7 +139,9 @@ document.addEventListener("DOMContentLoaded", () => {
     btnNotifyReview.addEventListener("click", () => {
         const bookId = btnNotifyReview.getAttribute("data-book-id");
         const bookTitle = btnNotifyReview.getAttribute("data-book-title");
-        showModal(bookId, bookTitle);
+        const studentId = btnNotifyReview.getAttribute("data-student-id");
+        const studentName = btnNotifyReview.getAttribute("data-student-name");
+        showModal(bookId, bookTitle, studentId, studentName);
         hideNotification();
     });
 
@@ -342,7 +345,7 @@ function renderHistory(history) {
         currentHistoryIds.add(item.id);
 
         if (!isFirstLoad && !lastHistoryIds.has(item.id) && item.status === "finalizado") {
-            showReturnNotification(item.livro_id, item.livro_titulo, item.aluno_nome);
+            showReturnNotification(item.livro_id, item.livro_titulo, item.aluno_id, item.aluno_nome);
         }
     });
 
@@ -572,10 +575,12 @@ function formatDate(dateStr) {
     }
 }
 
-function showReturnNotification(bookId, bookTitle, studentName) {
+function showReturnNotification(bookId, bookTitle, studentId, studentName) {
     notificationMessage.innerHTML = `<strong>${studentName}</strong> devolveu o livro <strong>"${bookTitle}"</strong>.`;
     btnNotifyReview.setAttribute("data-book-id", bookId);
     btnNotifyReview.setAttribute("data-book-title", bookTitle);
+    btnNotifyReview.setAttribute("data-student-id", studentId || "");
+    btnNotifyReview.setAttribute("data-student-name", studentName || "");
     notificationBar.classList.remove("hidden");
     setTimeout(hideNotification, 12000);
 }
@@ -584,13 +589,14 @@ function hideNotification() {
     notificationBar.classList.add("hidden");
 }
 
-function showModal(bookId, bookTitle) {
+function showModal(bookId, bookTitle, studentId = null, studentName = null) {
     setReviewModalMode("create");
     originalReviewSnapshot = null;
-    activeReviewerName = null;
+    activeReviewerId = studentId || currentActiveStudent?.id_rfid || null;
+    activeReviewerName = studentName || currentActiveStudent?.nome || null;
     formBookId.value = bookId;
     renderReviewBookPreview(bookId, bookTitle);
-    renderReviewAuthor(null);
+    renderReviewAuthor(activeReviewerName);
     setStarRating(0);
     formComment.value = "";
     formComment.setCustomValidity("");
@@ -611,6 +617,7 @@ function openExistingReview(reviewIndex) {
         currentActiveStudent &&
         review.aluno_id === currentActiveStudent.id_rfid;
 
+    activeReviewerId = review.aluno_id || null;
     activeReviewerName = review.aluno_nome || null;
     setReviewModalMode(isOwnReview ? "view-own" : "view");
     activeReviewId = review.id;
@@ -644,7 +651,7 @@ function setReviewModalMode(mode) {
     };
 
     reviewModalTitle.textContent = titles[mode];
-    commentLabel.textContent = mode === "view"
+    commentLabel.textContent = mode === "view" || activeReviewerName
         ? getReviewerLabel(activeReviewerName)
         : "Sua avaliação sobre a leitura";
     btnReviewSubmit.classList.toggle("hidden", mode === "view");
@@ -725,6 +732,7 @@ function hideModal() {
     reviewModal.classList.add("hidden");
     setReviewModalMode("create");
     originalReviewSnapshot = null;
+    activeReviewerId = null;
     activeReviewerName = null;
 }
 
@@ -793,6 +801,7 @@ async function submitReview(event) {
                 },
                 body: JSON.stringify({
                     livro_id: bookId,
+                    aluno_id: activeReviewerId,
                     nota: rating,
                     comentario: comment,
                 }),

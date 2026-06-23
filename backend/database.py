@@ -269,6 +269,22 @@ def get_active_loan_for_book(livro_id):
     return loan
 
 
+def get_last_returned_loan_for_book(livro_id):
+    conn = get_db_connection()
+    loan = conn.execute(
+        """
+        SELECT *
+        FROM emprestimos
+        WHERE livro_id = ? AND status = 'finalizado'
+        ORDER BY data_devolucao DESC, id DESC
+        LIMIT 1
+        """,
+        (livro_id,),
+    ).fetchone()
+    conn.close()
+    return loan
+
+
 def create_loan(aluno_id, livro_id):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -485,6 +501,7 @@ def get_dashboard_data(seconds_limit):
             e.data_emprestimo,
             e.data_devolucao,
             e.status,
+            e.aluno_id,
             a.nome as aluno_nome,
             a.matricula as aluno_matricula,
             l.titulo as livro_titulo,
